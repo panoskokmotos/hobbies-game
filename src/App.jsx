@@ -14,16 +14,18 @@ const QUICK_LIMIT = 5
 // ─── CARD DATA (50 cards) ─────────────────────────────────────────────────────
 
 const CARDS = [
-  { id: 1,  emoji: '🏃', label: 'Running',          category: 'physical'    },
-  { id: 2,  emoji: '🎸', label: 'Guitar',            category: 'music'       },
+  // First 5 cover 5 distinct categories → best archetype detection from quick swipe
   { id: 3,  emoji: '🧠', label: 'Philosophy',        category: 'mind'        },
+  { id: 8,  emoji: '✍️', label: 'Writing',           category: 'creative'    },
+  { id: 1,  emoji: '🏃', label: 'Running',           category: 'physical'    },
+  { id: 10, emoji: '🎉', label: 'Hosting',           category: 'social'      },
   { id: 4,  emoji: '✈️', label: 'Solo Travel',       category: 'exploration' },
+  // Remaining 45 cards
+  { id: 2,  emoji: '🎸', label: 'Guitar',            category: 'music'       },
   { id: 5,  emoji: '🍳', label: 'Cooking',           category: 'culinary'    },
   { id: 6,  emoji: '🧘', label: 'Meditation',        category: 'spiritual'   },
   { id: 7,  emoji: '🧗', label: 'Climbing',          category: 'physical'    },
-  { id: 8,  emoji: '✍️', label: 'Writing',           category: 'creative'    },
   { id: 9,  emoji: '🍷', label: 'Wine & Food',       category: 'culinary'    },
-  { id: 10, emoji: '🎉', label: 'Hosting',           category: 'social'      },
   { id: 11, emoji: '🔭', label: 'Astronomy',         category: 'mind'        },
   { id: 12, emoji: '🎬', label: 'Filmmaking',        category: 'creative'    },
   { id: 13, emoji: '🏄', label: 'Surfing',           category: 'physical'    },
@@ -49,7 +51,6 @@ const CARDS = [
   { id: 33, emoji: '⭐', label: 'Astrology',         category: 'spiritual'   },
   { id: 34, emoji: '🎭', label: 'Improv Theatre',    category: 'social'      },
   { id: 35, emoji: '🌳', label: 'Genealogy',         category: 'mind'        },
-  // — new cards —
   { id: 36, emoji: '🎛️', label: 'DJing',             category: 'music'       },
   { id: 37, emoji: '🥁', label: 'Drumming',          category: 'music'       },
   { id: 38, emoji: '🎼', label: 'Singing',           category: 'music'       },
@@ -275,6 +276,15 @@ function getShareUrl(archetype, liked) {
   return `${window.location.origin}${window.location.pathname}?p=${payload}`
 }
 
+function timeAgo(ts) {
+  const ms = Date.now() - new Date(ts).getTime()
+  const h = Math.floor(ms / 3600000)
+  const d = Math.floor(h / 24)
+  if (d > 0) return `${d}d ago`
+  if (h > 0) return `${h}h ago`
+  return 'just now'
+}
+
 function saveState(archetype, liked, recommendations) {
   try {
     localStorage.setItem('polymath_v1', JSON.stringify({
@@ -294,6 +304,43 @@ function loadState() {
     const archetype = ALL_ARCHETYPES.find(a => a.id === archetypeId) ?? DEFAULT_ARCHETYPE
     return { archetype, liked, recommendations: recs }
   } catch { return null }
+}
+
+function alienReaction(liked) {
+  if (!liked || liked.length === 0) return "I see potential. Show me what you love."
+  const scores = computeScores(liked)
+  const diverse = Object.values(scores).filter(v => v > 0).length
+  if (diverse >= 3) return "You contain multitudes. I had to stop you."
+  const top = Object.entries(scores).sort((a, b) => b[1] - a[1])[0]?.[0]
+  if (top === 'mind') return "A thinker. Rarer than you know."
+  if (top === 'physical') return "You live in your body. I respect that."
+  if (top === 'creative') return "You make things. That changes everything."
+  if (top === 'music') return "You hear the world differently. Literally."
+  if (top === 'exploration') return "You move. You seek. You find."
+  if (top === 'social') return "People come alive around you. Don't waste that."
+  if (top === 'craft') return "You build things with your hands. That's rare and beautiful."
+  if (top === 'spiritual') return "You're looking inward. Most people never dare."
+  if (top === 'tech') return "You build the future. You know it, too."
+  if (top === 'culinary') return "You understand pleasure. That's a form of wisdom."
+  return "I've seen enough. You're one of them."
+}
+
+function loadStreak() {
+  try {
+    const raw = localStorage.getItem('polymath_streak')
+    return raw ? JSON.parse(raw) : { count: 0, lastDate: null }
+  } catch { return { count: 0, lastDate: null } }
+}
+
+function updateStreak() {
+  const today = new Date().toDateString()
+  const s = loadStreak()
+  if (s.lastDate === today) return s
+  const gracePrev = new Date(Date.now() - 26 * 3600 * 1000).toDateString()
+  const count = s.lastDate === gracePrev ? s.count + 1 : 1
+  const next = { count, lastDate: today }
+  try { localStorage.setItem('polymath_streak', JSON.stringify(next)) } catch {}
+  return next
 }
 
 // ─── SOUND ────────────────────────────────────────────────────────────────────
@@ -468,6 +515,8 @@ function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initialLiked
   const isDeciding = useRef(false)
   const dragStart = useRef(null)
   const playSwipe = useSwipeSound()
+  const consecutiveRight = useRef(0)
+  const [streakMsg, setStreakMsg] = useState(null)
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -481,6 +530,7 @@ function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initialLiked
     if (isDeciding.current) return
     isDeciding.current = true
     playSwipe(direction)
+    if (navigator.vibrate) navigator.vibrate(direction === 'right' ? [30] : [10, 10])
     setExiting(direction)
     setDragging(false)
 
@@ -499,6 +549,22 @@ function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initialLiked
       setExiting(null)
       isDeciding.current = false
       dragStart.current = null
+
+      if (direction === 'right') {
+        consecutiveRight.current += 1
+        const n = consecutiveRight.current
+        const totalLikes = newLiked.length
+        let msg = null
+        if (n === 3) msg = "You're drawn to this. I see it. ✨"
+        else if (n === 5) msg = "A collector. I love that. 🔥"
+        else if (totalLikes === 10) msg = "10 passions and counting 💫"
+        if (msg) {
+          setStreakMsg(msg)
+          setTimeout(() => setStreakMsg(null), 2200)
+        }
+      } else {
+        consecutiveRight.current = 0
+      }
 
       if (onQuickComplete && newIndex >= QUICK_LIMIT + startIndex) onQuickComplete(newLiked)
       else if (newIndex >= CARDS.length) onComplete(newLiked)
@@ -620,7 +686,14 @@ function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initialLiked
         </div>
       </div>
 
-      <div className="flex gap-10 mt-10">
+      {streakMsg && (
+        <div className="mt-6 px-5 py-2.5 rounded-2xl text-sm font-semibold text-center animate-bounce-in"
+          style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)', maxWidth: 280 }}>
+          {streakMsg}
+        </div>
+      )}
+
+      <div className="flex gap-10 mt-6">
         <button onClick={() => decide('left')}
           className="w-16 h-16 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
           style={{ background: 'rgba(96,165,250,0.12)', border: '1.5px solid rgba(96,165,250,0.35)' }}>
@@ -723,14 +796,14 @@ function AlienProposalScreen({ liked, archetype, scores, recommendations, onSign
           <div className="text-7xl mb-2 animate-float" style={{ display: 'inline-block' }}>👽</div>
           <div className="text-3xl -mt-2 mb-4">💍</div>
           <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#8b5cf6' }}>
-            I've seen enough
+            The alien has spoken
           </p>
           <h1 className="text-white text-3xl font-bold leading-tight mb-2"
             style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>
-            Will you join<br />Polymath?
+            {alienReaction(liked)}
           </h1>
           <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
-            Your picks already tell a story. Let's unlock your archetype and find your people.
+            Will you join Polymath? Your archetype awaits — and so do your people.
           </p>
         </div>
 
@@ -877,6 +950,9 @@ function ArchetypeScreen({ archetype, liked, onNext }) {
           style={{ fontFamily: 'Fraunces, serif', fontWeight: 800, fontSize: 36, letterSpacing: '-0.03em' }}>
           {archetype.name}
         </h1>
+        <p className="text-center text-xs mb-4 font-medium" style={{ color: 'rgba(255,255,255,0.3)' }}>
+          {Math.round(21000 * archetype.rarity / 100)} Polymaths worldwide share this archetype
+        </p>
         <p className="text-center text-lg leading-relaxed mb-2" style={{ color: 'rgba(255,255,255,0.75)' }}>{archetype.description}</p>
         <p className="text-center text-base leading-relaxed mb-10" style={{ color: 'rgba(255,255,255,0.4)' }}>{archetype.description2}</p>
 
@@ -1330,9 +1406,14 @@ function BottomNav({ tab, onTab, matchCount = 0 }) {
 
 // ─── MATCH MODAL ──────────────────────────────────────────────────────────────
 
-function MatchModal({ myArchetype, theirProfile, onClose, onDiscover }) {
+function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, onDiscover }) {
   const [phase, setPhase] = useState(0)
+  const [waved, setWaved] = useState(false)
   useEffect(() => { setTimeout(() => setPhase(1), 100) }, [])
+
+  const theirLikedIds = new Set(theirProfile?.liked_card_ids || [])
+  const myIds = new Set((myLikedCards || []).map(c => c.id))
+  const sharedCards = (myLikedCards || []).filter(c => theirLikedIds.has(c.id)).slice(0, 3)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-6"
@@ -1346,10 +1427,26 @@ function MatchModal({ myArchetype, theirProfile, onClose, onDiscover }) {
         <h1 className="text-white text-3xl font-bold mb-3 leading-tight" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>
           You and {theirProfile?.display_name || 'someone'} clicked
         </h1>
-        <p className="text-sm mb-8 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
-          Two {myArchetype?.name} vibes found each other. Start a conversation.
-        </p>
-        <div className="flex justify-center gap-6 mb-8">
+
+        {sharedCards.length > 0 ? (
+          <div className="mb-6">
+            <p className="text-xs mb-2 font-medium" style={{ color: 'rgba(251,191,36,0.6)' }}>You both love</p>
+            <div className="flex gap-1.5 flex-wrap justify-center">
+              {sharedCards.map((c, i) => (
+                <span key={i} className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                  style={{ background: 'rgba(251,191,36,0.14)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.38)' }}>
+                  {c.emoji} {c.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm mb-6 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+            Two curious minds found each other. Start a conversation.
+          </p>
+        )}
+
+        <div className="flex justify-center gap-6 mb-6">
           <div className="flex flex-col items-center gap-2">
             <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl"
               style={{ background: 'rgba(251,191,36,0.12)', border: '2px solid rgba(251,191,36,0.3)' }}>
@@ -1366,8 +1463,15 @@ function MatchModal({ myArchetype, theirProfile, onClose, onDiscover }) {
             <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>{theirProfile?.display_name || 'Them'}</span>
           </div>
         </div>
+
+        <button
+          onClick={() => setWaved(true)}
+          className="w-full py-3.5 rounded-2xl font-bold mb-3 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          style={{ background: waved ? 'rgba(251,191,36,0.12)' : 'rgba(251,191,36,0.15)', color: waved ? '#fbbf24' : '#fbbf24', border: '1px solid rgba(251,191,36,0.35)' }}>
+          {waved ? '👋 Wave sent!' : 'Send a Wave 👋'}
+        </button>
         <button onClick={onDiscover}
-          className="w-full py-4 rounded-2xl text-white font-bold mb-3 transition-all hover:scale-[1.02]"
+          className="w-full py-3.5 rounded-2xl text-white font-bold mb-3 transition-all hover:scale-[1.02]"
           style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', boxShadow: '0 0 40px rgba(139,92,246,0.3)' }}>
           See My Matches
         </button>
@@ -1469,15 +1573,32 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
   }
 
   if (profiles.length === 0 || index >= profiles.length) {
+    const isEmpty = profiles.length === 0
+    const inviteText = `I just found out I'm The ${user?.email?.split('@')[0] || 'Explorer'} on Polymath — what are you? 60-second test → ${window.location.origin}`
+    const handleInvite = () => {
+      if (navigator.share) {
+        navigator.share({ title: 'Join me on Polymath', text: inviteText, url: window.location.origin }).catch(() => {})
+      } else {
+        navigator.clipboard.writeText(window.location.origin).catch(() => {})
+      }
+    }
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={{ background: '#0a0a0f', paddingBottom: 80 }}>
         <div className="text-5xl mb-4">🌌</div>
-        <h2 className="text-white text-2xl font-bold mb-2" style={{ fontFamily: 'Fraunces, serif' }}>
-          {profiles.length === 0 ? "You're the first one here" : "You've seen everyone"}
+        <h2 className="text-white text-2xl font-bold mb-3" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
+          {isEmpty ? "You're one of the first here." : "You've seen everyone."}
         </h2>
-        <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          Share Polymath with people you know — the more who join, the better your matches.
+        <p className="text-sm leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.4)', maxWidth: 260 }}>
+          {isEmpty
+            ? "The people who join now will define this community."
+            : "Invite friends — new matches appear when they join."}
         </p>
+        <button
+          onClick={handleInvite}
+          className="px-6 py-3 rounded-2xl font-bold text-sm transition-all hover:scale-[1.03] active:scale-[0.97]"
+          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', boxShadow: '0 0 30px rgba(139,92,246,0.3)' }}>
+          {isEmpty ? '✨ Invite friends & unlock matches' : '🔗 Invite more people'}
+        </button>
       </div>
     )
   }
@@ -1489,6 +1610,8 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
   const archName = ALL_ARCHETYPES.find(a => a.id === profile.archetype_id)
   const likedCards = (profile.liked_card_ids || []).map(id => CARDS.find(c => c.id === id)).filter(Boolean)
   const top5 = likedCards.slice(0, 5)
+  const myLikedIds = new Set(myProfile?.liked_card_ids || [])
+  const sharedCards = likedCards.filter(c => myLikedIds.has(c.id)).slice(0, 3)
 
   const rotation = offset.x * 0.1
   const swipeDir = offset.x > 50 ? 'right' : offset.x < -50 ? 'left' : null
@@ -1565,6 +1688,21 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
                     {c.emoji} {c.label}
                   </span>
                 ))}
+              </div>
+            )}
+
+            {/* Shared interests */}
+            {sharedCards.length > 0 && (
+              <div className="mb-3 w-full">
+                <p className="text-center text-xs mb-1.5 font-medium" style={{ color: 'rgba(251,191,36,0.55)' }}>you both love</p>
+                <div className="flex gap-1.5 flex-wrap justify-center">
+                  {sharedCards.map((c, i) => (
+                    <span key={i} className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                      style={{ background: 'rgba(251,191,36,0.14)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.38)' }}>
+                      {c.emoji} {c.label}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -1672,10 +1810,15 @@ function MyMatchesScreen({ user, myArchetype }) {
                       {otherArch?.name || 'Explorer'}
                     </p>
                   </div>
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0"
-                    style={{ background: 'rgba(139,92,246,0.12)', color: '#8b5cf6', border: '1px solid rgba(139,92,246,0.25)' }}>
-                    Matched
-                  </span>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <span className="text-xs font-bold px-2.5 py-1.5 rounded-full"
+                      style={{ background: 'rgba(139,92,246,0.18)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.35)' }}>
+                      Message →
+                    </span>
+                    <span className="text-xs" style={{ color: 'rgba(255,255,255,0.22)' }}>
+                      {match.created_at ? timeAgo(match.created_at) : ''}
+                    </span>
+                  </div>
                 </div>
               )
             })}
@@ -1727,7 +1870,7 @@ function WrappedCard({ archetype, liked, innerRef }) {
 
 // ─── PROFILE SCREEN ───────────────────────────────────────────────────────────
 
-function ProfileScreen({ archetype, liked, recommendations, onRestart, user, scores: scoresProp, onSaved, onGoDiscover }) {
+function ProfileScreen({ archetype, liked, recommendations, onRestart, user, scores: scoresProp, onSaved, onGoDiscover, streak }) {
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const scores = scoresProp ?? computeScores(liked)
@@ -1779,9 +1922,17 @@ function ProfileScreen({ archetype, liked, recommendations, onRestart, user, sco
     <div className="min-h-screen px-4 py-10" style={{ background: '#0a0a0f' }}>
       <div className="max-w-sm mx-auto">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-4"
-            style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
-            {archetype.emoji} {archetype.rarityLabel}
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest"
+              style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+              {archetype.emoji} {archetype.rarityLabel}
+            </div>
+            {streak?.count > 0 && (
+              <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold"
+                style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>
+                🔥 {streak.count}d
+              </div>
+            )}
           </div>
           <h1 className="text-white leading-tight"
             style={{ fontFamily: 'Fraunces, serif', fontWeight: 900, fontSize: 34, letterSpacing: '-0.03em' }}>
@@ -1896,6 +2047,7 @@ export default function App() {
   const [tab, setTab] = useState('profile') // 'profile' | 'discover' | 'matches'
   const [matchData, setMatchData] = useState(null) // { myArchetype, theirProfile }
   const [matchCount, setMatchCount] = useState(0)
+  const [streak, setStreak] = useState(() => loadStreak())
 
   // Restore auth session and listen for changes; handle OAuth redirect recovery
   useEffect(() => {
@@ -1949,6 +2101,7 @@ export default function App() {
       // Already handled by onAuthStateChange — just wait (screen stays 'loading')
       return
     }
+    setStreak(updateStreak())
     const data = loadState()
     if (data) {
       setSaved(data)
@@ -2056,6 +2209,7 @@ export default function App() {
               onRestart={handleRestart}
               user={user}
               scores={scores}
+              streak={streak}
               onSaved={handleProfileSaved}
               onGoDiscover={() => setTab('discover')}
             />
@@ -2080,6 +2234,7 @@ export default function App() {
       {matchData && (
         <MatchModal
           myArchetype={matchData.myArchetype}
+          myLikedCards={liked}
           theirProfile={matchData.theirProfile}
           onClose={() => setMatchData(null)}
           onDiscover={() => { setMatchData(null); setTab('matches') }}
