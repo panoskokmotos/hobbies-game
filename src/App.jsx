@@ -2,11 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Heart, X, ChevronRight, Download, Copy, Check, RefreshCw, Share2, Zap, User, Compass, MessageCircle, LogOut, Eye, EyeOff } from 'lucide-react'
 import { bb } from './lib/butterbase.js'
 import {
-  signUp, signIn, signOut, getSession, onAuthStateChange,
+  signUp, signIn, signOut, signInWithGoogle, signInWithApple,
+  getSession, onAuthStateChange,
   saveProfile, getMyProfile, getDiscoveryProfiles,
   recordSwipe, checkMutualLike, createMatch, getMyMatches,
   compatibilityScore,
 } from './lib/api.js'
+
+const QUICK_LIMIT = 5
 
 // ─── CARD DATA (50 cards) ─────────────────────────────────────────────────────
 
@@ -453,15 +456,15 @@ function ReturningUserScreen({ saved, onContinue, onRestart }) {
 
 // ─── SWIPE SCREEN ─────────────────────────────────────────────────────────────
 
-function SwipeScreen({ onComplete }) {
-  const [index, setIndex] = useState(0)
-  const [liked, setLiked] = useState([])
+function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initialLiked = [] }) {
+  const [index, setIndex] = useState(startIndex)
+  const [liked, setLiked] = useState(initialLiked)
   const [exiting, setExiting] = useState(null)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
 
-  const indexRef = useRef(0)
-  const likedRef = useRef([])
+  const indexRef = useRef(startIndex)
+  const likedRef = useRef(initialLiked)
   const isDeciding = useRef(false)
   const dragStart = useRef(null)
   const playSwipe = useSwipeSound()
@@ -497,7 +500,8 @@ function SwipeScreen({ onComplete }) {
       isDeciding.current = false
       dragStart.current = null
 
-      if (newIndex >= CARDS.length) onComplete(newLiked)
+      if (onQuickComplete && newIndex >= QUICK_LIMIT + startIndex) onQuickComplete(newLiked)
+      else if (newIndex >= CARDS.length) onComplete(newLiked)
     }, 380)
   }, [onComplete, playSwipe])
 
@@ -558,11 +562,11 @@ function SwipeScreen({ onComplete }) {
           <span className="text-white font-bold text-xl" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
             polymath
           </span>
-          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{index}/{CARDS.length}</span>
+          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{index - startIndex}/{onQuickComplete ? QUICK_LIMIT : CARDS.length}</span>
         </div>
         <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
           <div className="h-full rounded-full transition-all duration-300"
-            style={{ width: `${(index / CARDS.length) * 100}%`, background: 'linear-gradient(90deg,#f59e0b,#fbbf24)' }} />
+            style={{ width: `${((index - startIndex) / (onQuickComplete ? QUICK_LIMIT : CARDS.length)) * 100}%`, background: 'linear-gradient(90deg,#f59e0b,#fbbf24)' }} />
         </div>
         {liked.length > 0 && (
           <p className="text-xs mt-1.5 text-right" style={{ color: 'rgba(251,191,36,0.7)' }}>
@@ -627,6 +631,213 @@ function SwipeScreen({ onComplete }) {
           style={{ background: 'rgba(251,191,36,0.12)', border: '1.5px solid rgba(251,191,36,0.35)' }}>
           <Heart size={26} color="#fbbf24" />
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── ALIEN PROPOSAL SCREEN ───────────────────────────────────────────────────
+
+function AlienProposalScreen({ liked, archetype, scores, recommendations, onSignedUp, onSkip }) {
+  const [phase, setPhase] = useState(0)
+  const [authMode, setAuthMode] = useState(null) // null | 'email'
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPw, setShowPw] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [socialLoading, setSocialLoading] = useState(null) // 'google' | 'apple'
+  const [error, setError] = useState(null)
+  const [emailConfirm, setEmailConfirm] = useState(false)
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setPhase(1), 120)
+    const t2 = setTimeout(() => setPhase(2), 700)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [])
+
+  const handleSocialAuth = async (provider) => {
+    setSocialLoading(provider)
+    setError(null)
+    try {
+      localStorage.setItem('polymath_quick', JSON.stringify({ likedIds: liked.map(c => c.id) }))
+      if (provider === 'google') await signInWithGoogle()
+      else await signInWithApple()
+    } catch (err) {
+      setError('Could not open sign-in. Try email instead.')
+      localStorage.removeItem('polymath_quick')
+    }
+    setSocialLoading(null)
+  }
+
+  const handleEmailSignUp = async e => {
+    e.preventDefault()
+    setLoading(true); setError(null)
+    try {
+      const { data, error: authErr } = await signUp({ name, email, password })
+      if (authErr) { setError(authErr.message || 'Sign up failed'); setLoading(false); return }
+      const userId = data?.user?.id
+      if (userId) {
+        await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name })
+        onSignedUp(data.user)
+      } else {
+        setEmailConfirm(true)
+      }
+    } catch (err) {
+      setError(err.message || 'Something went wrong')
+    }
+    setLoading(false)
+  }
+
+  if (emailConfirm) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: '#0a0a0f' }}>
+        <div className="w-full max-w-xs text-center">
+          <div className="text-6xl mb-4">📬</div>
+          <h2 className="text-white text-2xl font-bold mb-3" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>
+            Check your inbox
+          </h2>
+          <p className="text-sm leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.45)' }}>
+            We sent a confirmation link to <span style={{ color: '#fbbf24' }}>{email}</span>. Click it and come back to explore.
+          </p>
+          <button onClick={onSkip}
+            className="text-xs transition-opacity hover:opacity-70"
+            style={{ color: 'rgba(255,255,255,0.3)' }}>
+            Continue without account →
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-10 relative overflow-hidden"
+      style={{ background: '#0a0a0f' }}>
+      <div className="absolute inset-0 pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse 70% 50% at 50% 25%, rgba(139,92,246,0.12) 0%, transparent 70%)' }} />
+
+      <div className="w-full max-w-xs relative z-10">
+        {/* Alien + headline */}
+        <div className="text-center mb-6"
+          style={{ opacity: phase >= 1 ? 1 : 0, transform: phase >= 1 ? 'translateY(0)' : 'translateY(20px)', transition: 'opacity 0.6s ease, transform 0.6s cubic-bezier(0.16,1,0.3,1)' }}>
+          <div className="text-7xl mb-2 animate-float" style={{ display: 'inline-block' }}>👽</div>
+          <div className="text-3xl -mt-2 mb-4">💍</div>
+          <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#8b5cf6' }}>
+            I've seen enough
+          </p>
+          <h1 className="text-white text-3xl font-bold leading-tight mb-2"
+            style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>
+            Will you join<br />Polymath?
+          </h1>
+          <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            Your picks already tell a story. Let's unlock your archetype and find your people.
+          </p>
+        </div>
+
+        {/* Liked cards pills */}
+        {liked.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-1.5 mb-6"
+            style={{ opacity: phase >= 2 ? 1 : 0, transform: phase >= 2 ? 'scale(1)' : 'scale(0.95)', transition: 'opacity 0.5s 0.1s ease, transform 0.5s 0.1s ease' }}>
+            {liked.map(c => (
+              <span key={c.id} className="px-3 py-1.5 rounded-full text-xs font-medium"
+                style={{ background: `${CATEGORY_COLORS[c.category]}15`, color: CATEGORY_COLORS[c.category], border: `1px solid ${CATEGORY_COLORS[c.category]}30` }}>
+                {c.emoji} {c.label}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Auth section */}
+        <div style={{ opacity: phase >= 2 ? 1 : 0, transform: phase >= 2 ? 'translateY(0)' : 'translateY(12px)', transition: 'opacity 0.5s 0.2s ease, transform 0.5s 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
+          {error && (
+            <div className="rounded-xl px-4 py-2.5 mb-3 text-sm" style={{ background: 'rgba(239,68,68,0.12)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.2)' }}>
+              {error}
+            </div>
+          )}
+
+          {authMode !== 'email' && (
+            <>
+              {/* Google button */}
+              <button
+                onClick={() => handleSocialAuth('google')}
+                disabled={!!socialLoading}
+                className="w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-3 mb-3 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                style={{ background: 'white', color: '#1f1f1f', opacity: socialLoading ? 0.7 : 1 }}>
+                {socialLoading === 'google' ? (
+                  <div className="w-4 h-4 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" />
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 18 18">
+                    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+                    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+                    <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+                    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+                  </svg>
+                )}
+                {socialLoading === 'google' ? 'Opening Google…' : 'Continue with Google'}
+              </button>
+
+              {/* Apple button */}
+              <button
+                onClick={() => handleSocialAuth('apple')}
+                disabled={!!socialLoading}
+                className="w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-3 mb-4 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                style={{ background: '#1a1a1a', color: 'white', border: '1px solid rgba(255,255,255,0.15)', opacity: socialLoading ? 0.7 : 1 }}>
+                {socialLoading === 'apple' ? (
+                  <div className="w-4 h-4 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" />
+                ) : (
+                  <svg width="17" height="17" viewBox="0 0 17 17" fill="white">
+                    <path d="M14.04 8.862c-.02-2.175 1.784-3.228 1.864-3.28-1.019-1.487-2.598-1.69-3.154-1.708-1.33-.136-2.61.788-3.286.788-.676 0-1.7-.773-2.8-.751-1.428.021-2.758.839-3.492 2.118C1.675 8.55 2.76 13.1 4.303 15.168c.768 1.102 1.682 2.333 2.876 2.29 1.16-.048 1.596-.742 2.997-.742 1.4 0 1.797.742 3.012.717 1.248-.02 2.033-1.111 2.787-2.22.893-1.272 1.253-2.515 1.268-2.578-.027-.012-2.42-.924-2.443-3.673zM11.773 2.54C12.377 1.81 12.78.82 12.664-.2c-.857.037-1.91.574-2.53 1.286-.549.633-1.035 1.655-.905 2.631.957.073 1.938-.484 2.544-1.177z"/>
+                  </svg>
+                )}
+                {socialLoading === 'apple' ? 'Opening Apple…' : 'Continue with Apple'}
+              </button>
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>or</span>
+                <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
+              </div>
+
+              <button onClick={() => setAuthMode('email')}
+                className="w-full py-3 rounded-xl text-sm font-medium mb-5 transition-all hover:opacity-80"
+                style={{ background: 'rgba(139,92,246,0.12)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.25)' }}>
+                Continue with Email
+              </button>
+            </>
+          )}
+
+          {authMode === 'email' && (
+            <form onSubmit={handleEmailSignUp} className="space-y-2.5 mb-5">
+              <button type="button" onClick={() => setAuthMode(null)} className="text-xs mb-1 transition-opacity hover:opacity-70"
+                style={{ color: 'rgba(255,255,255,0.3)' }}>← back</button>
+              <input type="text" placeholder="Your name" value={name} onChange={e => setName(e.target.value)} required
+                className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+              <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required
+                className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+              <div className="relative">
+                <input type={showPw ? 'text' : 'password'} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required
+                  className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none pr-10"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+                <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              <button type="submit" disabled={loading}
+                className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
+                style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', opacity: loading ? 0.7 : 1 }}>
+                {loading ? 'Creating account…' : 'Join Polymath →'}
+              </button>
+            </form>
+          )}
+
+          <button onClick={onSkip}
+            className="w-full text-xs transition-opacity hover:opacity-70 text-center"
+            style={{ color: 'rgba(255,255,255,0.25)' }}>
+            Skip for now — explore first →
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -883,17 +1094,24 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [saved, setSaved] = useState(false)
+  const [socialLoading, setSocialLoading] = useState(null)
 
   const handleSignUp = async e => {
     e.preventDefault()
     setLoading(true); setError(null)
-    const { data, error: authErr } = await signUp({ name, email, password })
-    if (authErr) { setError(authErr.message); setLoading(false); return }
-    const userId = data?.user?.id
-    if (userId) {
-      await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name })
-      setSaved(true)
-      onSaved?.(data.user)
+    try {
+      const { data, error: authErr } = await signUp({ name, email, password })
+      if (authErr) { setError(authErr.message || 'Sign up failed'); setLoading(false); return }
+      const userId = data?.user?.id
+      if (userId) {
+        await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name })
+        setSaved(true)
+        onSaved?.(data.user)
+      } else {
+        setError('Check your email to confirm your account, then sign in.')
+      }
+    } catch (err) {
+      setError(err.message || 'Sign up failed')
     }
     setLoading(false)
   }
@@ -901,18 +1119,37 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
   const handleSignIn = async e => {
     e.preventDefault()
     setLoading(true); setError(null)
-    const { data, error: authErr } = await signIn({ email, password })
-    if (authErr) { setError(authErr.message); setLoading(false); return }
-    const userId = data?.user?.id
-    if (userId) {
-      const { data: existing } = await getMyProfile(userId)
-      if (!existing?.[0]) {
-        await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name || email.split('@')[0] })
+    try {
+      const { data, error: authErr } = await signIn({ email, password })
+      if (authErr) { setError(authErr.message || 'Sign in failed'); setLoading(false); return }
+      const userId = data?.user?.id
+      if (userId) {
+        const { data: existing } = await getMyProfile(userId)
+        if (!existing?.[0]) {
+          await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name || email.split('@')[0] })
+        }
+        setSaved(true)
+        onSaved?.(data.user)
+      } else {
+        setError('Sign in failed — please check your credentials.')
       }
-      setSaved(true)
-      onSaved?.(data.user)
+    } catch (err) {
+      setError(err.message || 'Sign in failed')
     }
     setLoading(false)
+  }
+
+  const handleSocialAuth = async (provider) => {
+    setSocialLoading(provider); setError(null)
+    try {
+      localStorage.setItem('polymath_quick', JSON.stringify({ likedIds: liked.map(c => c.id) }))
+      if (provider === 'google') await signInWithGoogle()
+      else await signInWithApple()
+    } catch (err) {
+      setError('Could not open sign-in. Try email instead.')
+      localStorage.removeItem('polymath_quick')
+    }
+    setSocialLoading(null)
   }
 
   // Already logged in
@@ -959,17 +1196,52 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
         <h3 className="text-white font-bold text-xl mb-1" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
           Meet real people
         </h3>
-        <p className="text-sm mb-5 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+        <p className="text-sm mb-4 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
           Swipe on real profiles matched to your archetype. Find your intellectual soulmates.
         </p>
+
+        {error && (
+          <div className="rounded-xl px-4 py-2.5 mb-3 text-sm" style={{ background: 'rgba(239,68,68,0.12)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.2)' }}>
+            {error}
+          </div>
+        )}
+
+        <button
+          onClick={() => handleSocialAuth('google')}
+          disabled={!!socialLoading}
+          className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-3 mb-2 transition-all hover:scale-[1.02]"
+          style={{ background: 'white', color: '#1f1f1f', opacity: socialLoading ? 0.7 : 1 }}>
+          {socialLoading === 'google' ? <div className="w-4 h-4 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" /> : (
+            <svg width="16" height="16" viewBox="0 0 18 18"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+          )}
+          {socialLoading === 'google' ? 'Opening Google…' : 'Continue with Google'}
+        </button>
+
+        <button
+          onClick={() => handleSocialAuth('apple')}
+          disabled={!!socialLoading}
+          className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-3 mb-3 transition-all hover:scale-[1.02]"
+          style={{ background: '#1a1a1a', color: 'white', border: '1px solid rgba(255,255,255,0.12)', opacity: socialLoading ? 0.7 : 1 }}>
+          {socialLoading === 'apple' ? <div className="w-4 h-4 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" /> : (
+            <svg width="15" height="15" viewBox="0 0 17 17" fill="white"><path d="M14.04 8.862c-.02-2.175 1.784-3.228 1.864-3.28-1.019-1.487-2.598-1.69-3.154-1.708-1.33-.136-2.61.788-3.286.788-.676 0-1.7-.773-2.8-.751-1.428.021-2.758.839-3.492 2.118C1.675 8.55 2.76 13.1 4.303 15.168c.768 1.102 1.682 2.333 2.876 2.29 1.16-.048 1.596-.742 2.997-.742 1.4 0 1.797.742 3.012.717 1.248-.02 2.033-1.111 2.787-2.22.893-1.272 1.253-2.515 1.268-2.578-.027-.012-2.42-.924-2.443-3.673zM11.773 2.54C12.377 1.81 12.78.82 12.664-.2c-.857.037-1.91.574-2.53 1.286-.549.633-1.035 1.655-.905 2.631.957.073 1.938-.484 2.544-1.177z"/></svg>
+          )}
+          {socialLoading === 'apple' ? 'Opening Apple…' : 'Continue with Apple'}
+        </button>
+
+        <div className="flex items-center gap-3 mb-3">
+          <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.07)' }} />
+          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>or</span>
+          <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.07)' }} />
+        </div>
+
         <button onClick={() => setMode('signup')}
-          className="w-full py-3.5 rounded-xl font-bold text-sm mb-2 transition-all hover:scale-[1.02]"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white' }}>
-          Create Free Account →
+          className="w-full py-3 rounded-xl font-semibold text-sm mb-2 transition-all hover:scale-[1.02]"
+          style={{ background: 'rgba(139,92,246,0.12)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.25)' }}>
+          Continue with Email →
         </button>
         <button onClick={() => setMode('signin')}
-          className="w-full py-2.5 rounded-xl text-sm transition-opacity hover:opacity-70"
-          style={{ color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          className="w-full py-2 rounded-xl text-xs transition-opacity hover:opacity-70"
+          style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.08)' }}>
           Already have an account? Sign in
         </button>
       </div>
@@ -1625,10 +1897,11 @@ export default function App() {
   const [matchData, setMatchData] = useState(null) // { myArchetype, theirProfile }
   const [matchCount, setMatchCount] = useState(0)
 
-  // Restore auth session and listen for changes
+  // Restore auth session and listen for changes; handle OAuth redirect recovery
   useEffect(() => {
     const session = getSession()
-    if (session?.user) setUser(session.user)
+    const currentUser = session?.user ?? null
+    if (currentUser) setUser(currentUser)
 
     const unsub = onAuthStateChange(({ session: s }) => {
       const u = s?.user ?? null
@@ -1637,6 +1910,22 @@ export default function App() {
         getMyProfile(u.id).then(({ data }) => {
           if (data?.[0]) setDbProfile(data[0])
         })
+        // OAuth redirect recovery: restore pending quick-onboard
+        const raw = localStorage.getItem('polymath_quick')
+        if (raw) {
+          try {
+            const { likedIds } = JSON.parse(raw)
+            const pendingLiked = likedIds.map(id => CARDS.find(c => c.id === id)).filter(Boolean)
+            const arch = computeArchetype(pendingLiked)
+            const sc = computeScores(pendingLiked)
+            localStorage.removeItem('polymath_quick')
+            setLiked(pendingLiked)
+            setArchetype(arch)
+            saveProfile(u.id, { archetype: arch, liked: pendingLiked, scores: sc, recommendations: null, displayName: u.email?.split('@')[0] || 'Explorer' })
+              .then(() => getMyProfile(u.id).then(({ data }) => { if (data?.[0]) setDbProfile(data[0]) }))
+            setScreen('archetype')
+          } catch {}
+        }
       } else {
         setDbProfile(null)
       }
@@ -1650,8 +1939,16 @@ export default function App() {
     getMyMatches(user.id).then(({ data }) => setMatchCount((data || []).length))
   }, [user, matchData])
 
-  // Check localStorage on mount
+  // Check localStorage on mount; if OAuth just returned with a session,
+  // the onAuthStateChange handler above handles the redirect recovery.
+  // Otherwise, set initial screen normally.
   useEffect(() => {
+    const session = getSession()
+    const quickRaw = localStorage.getItem('polymath_quick')
+    if (quickRaw && session?.user) {
+      // Already handled by onAuthStateChange — just wait (screen stays 'loading')
+      return
+    }
     const data = loadState()
     if (data) {
       setSaved(data)
@@ -1663,10 +1960,27 @@ export default function App() {
 
   useEffect(() => { window.scrollTo(0, 0) }, [screen, tab])
 
+  const handleQuickSwipeComplete = useCallback(likedCards => {
+    setLiked(likedCards)
+    setArchetype(computeArchetype(likedCards))
+    setScreen('alien-proposal')
+  }, [])
+
   const handleSwipeComplete = useCallback(likedCards => {
     setLiked(likedCards)
     setArchetype(computeArchetype(likedCards))
     setScreen('archetype')
+  }, [])
+
+  const handleAlienSignedUp = useCallback((newUser) => {
+    setUser(newUser)
+    getMyProfile(newUser.id).then(({ data }) => { if (data?.[0]) setDbProfile(data[0]) })
+    setScreen('archetype')
+  }, [])
+
+  const handleAlienSkip = useCallback(() => {
+    // Continue the full 50-card flow from where they left off
+    setScreen('swipe-continue')
   }, [])
 
   const handleMatchesComplete = () => {
@@ -1700,7 +2014,29 @@ export default function App() {
           onRestart={handleRestart}
         />
       )}
-      {screen === 'swipe' && <SwipeScreen onComplete={handleSwipeComplete} />}
+      {screen === 'swipe' && (
+        <SwipeScreen
+          onComplete={handleSwipeComplete}
+          onQuickComplete={handleQuickSwipeComplete}
+        />
+      )}
+      {screen === 'swipe-continue' && (
+        <SwipeScreen
+          onComplete={handleSwipeComplete}
+          startIndex={QUICK_LIMIT}
+          initialLiked={liked}
+        />
+      )}
+      {screen === 'alien-proposal' && archetype && (
+        <AlienProposalScreen
+          liked={liked}
+          archetype={archetype}
+          scores={scores}
+          recommendations={recommendations}
+          onSignedUp={handleAlienSignedUp}
+          onSkip={handleAlienSkip}
+        />
+      )}
       {screen === 'archetype' && archetype && (
         <ArchetypeScreen archetype={archetype} liked={liked} onNext={() => setScreen('recommendations')} />
       )}

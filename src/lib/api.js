@@ -2,13 +2,37 @@ import { bb } from './butterbase.js'
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 
-export const signUp = ({ name, email, password }) =>
-  bb.auth.signUp({ email, password })
+export const signUp = async ({ name, email, password }) => {
+  try {
+    const result = await bb.auth.signUp({ email, password })
+    return result
+  } catch (err) {
+    return { data: null, error: { message: err.message || 'Sign up failed' } }
+  }
+}
 
-export const signIn = ({ email, password }) =>
-  bb.auth.signIn({ email, password })
+export const signIn = async ({ email, password }) => {
+  try {
+    const result = await bb.auth.signIn({ email, password })
+    return result
+  } catch (err) {
+    return { data: null, error: { message: err.message || 'Sign in failed' } }
+  }
+}
 
-export const signOut = () => bb.auth.signOut()
+export const signInWithGoogle = () =>
+  bb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
+
+export const signInWithApple = () =>
+  bb.auth.signInWithOAuth({ provider: 'apple', options: { redirectTo: window.location.origin } })
+
+export const signOut = async () => {
+  try {
+    return await bb.auth.signOut()
+  } catch (err) {
+    return { error: { message: err.message } }
+  }
+}
 
 export const getSession = () => bb.sessionManager.getSession()
 
