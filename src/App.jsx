@@ -2,9 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Heart, X, ChevronRight, Download, Copy, Check, RefreshCw, Share2, Zap, User, Compass, MessageCircle, LogOut, Eye, EyeOff } from 'lucide-react'
 import { bb } from './lib/butterbase.js'
 import {
-  signUp, signIn, signOut, signInWithOAuth, getSession, onAuthStateChange,
-  saveProfile, getMyProfile, getDiscoveryProfiles,
+  signUp, signIn, signOut, signInWithOAuth, sendMagicLink, verifyMagicLink,
+  getSession, onAuthStateChange,
+  saveProfile, updateProfile, getMyProfile, getDiscoveryProfiles,
   recordSwipe, checkMutualLike, createMatch, getMyMatches,
+  getMessages, sendMessage,
   compatibilityScore,
 } from './lib/api.js'
 
@@ -464,11 +466,13 @@ function SwipeScreen({ onComplete, cards = SEED_CARDS }) {
   const [exiting, setExiting] = useState(null)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
+  const [depthCard, setDepthCard] = useState(null) // card awaiting depth pick
 
   const indexRef = useRef(0)
   const likedRef = useRef([])
   const isDeciding = useRef(false)
   const dragStart = useRef(null)
+  const pendingRef = useRef(null) // { newLiked, newIndex } waiting for depth pick
   const playSwipe = useSwipeSound()
 
   useEffect(() => {
@@ -478,6 +482,30 @@ function SwipeScreen({ onComplete, cards = SEED_CARDS }) {
     }, 900)
     return () => clearTimeout(t)
   }, [])
+
+  const commitDecision = useCallback((newLiked, newIndex) => {
+    likedRef.current = newLiked
+    indexRef.current = newIndex
+    setLiked(newLiked)
+    setIndex(newIndex)
+    setOffset({ x: 0, y: 0 })
+    setExiting(null)
+    isDeciding.current = false
+    dragStart.current = null
+    if (newIndex >= cards.length) onComplete(newLiked)
+  }, [cards.length, onComplete])
+
+  const handleDepthPick = useCallback((depth) => {
+    if (!pendingRef.current) return
+    const { newLiked, newIndex } = pendingRef.current
+    pendingRef.current = null
+    // Apply depth to the last liked card
+    const updated = depth
+      ? newLiked.map((c, i) => i === newLiked.length - 1 ? { ...c, depth } : c)
+      : newLiked
+    setDepthCard(null)
+    commitDecision(updated, newIndex)
+  }, [commitDecision])
 
   const decide = useCallback((direction) => {
     if (isDeciding.current) return
@@ -493,18 +521,18 @@ function SwipeScreen({ onComplete, cards = SEED_CARDS }) {
       const newLiked = direction === 'right' ? [...currentLiked, currentCard] : [...currentLiked]
       const newIndex = indexRef.current + 1
 
-      likedRef.current = newLiked
-      indexRef.current = newIndex
-      setLiked(newLiked)
-      setIndex(newIndex)
-      setOffset({ x: 0, y: 0 })
-      setExiting(null)
-      isDeciding.current = false
-      dragStart.current = null
-
-      if (newIndex >= cards.length) onComplete(newLiked)
+      if (direction === 'right') {
+        // Show depth picker before committing
+        pendingRef.current = { newLiked, newIndex }
+        setDepthCard(currentCard)
+        setExiting(null)
+        isDeciding.current = false
+        dragStart.current = null
+      } else {
+        commitDecision(newLiked, newIndex)
+      }
     }, 380)
-  }, [onComplete, playSwipe])
+  }, [cards, commitDecision, playSwipe])
 
   useEffect(() => {
     const onKey = e => {
@@ -533,7 +561,9 @@ function SwipeScreen({ onComplete, cards = SEED_CARDS }) {
     dragStart.current = null
   }
 
-  if (index >= cards.length) return null
+  if (index >= cards.length && !depthCard) return null
+
+  if (depthCard) return <DepthPicker card={depthCard} onPick={handleDepthPick} />
 
   const card = cards[index]
   const nextCard = cards[index + 1]
@@ -877,6 +907,264 @@ function MatchesScreen({ onNext }) {
   )
 }
 
+// ─── DEPTH PICKER ─────────────────────────────────────────────────────────────
+
+const DEPTH_OPTIONS = [
+  { key: 'curious',     emoji: '💫', label: 'Curious',     color: '#60a5fa' },
+  { key: 'enthusiast',  emoji: '⚡', label: 'Enthusiast',  color: '#fbbf24' },
+  { key: 'obsessed',    emoji: '🔥', label: 'Obsessed',    color: '#f97316' },
+]
+
+function DepthPicker({ card, onPick }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center pb-16"
+      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
+      <div className="w-full max-w-xs px-4 animate-fade-up">
+        <p className="text-center text-sm mb-3 font-semibold" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          How into <span style={{ color: '#fbbf24' }}>{card.emoji} {card.label}</span> are you?
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {DEPTH_OPTIONS.map(opt => (
+            <button key={opt.key} onClick={() => onPick(opt.key)}
+              className="py-4 rounded-2xl flex flex-col items-center gap-1.5 transition-all hover:scale-[1.03] active:scale-95"
+              style={{ background: `${opt.color}14`, border: `1.5px solid ${opt.color}30` }}>
+              <span className="text-2xl">{opt.emoji}</span>
+              <span className="text-xs font-bold" style={{ color: opt.color }}>{opt.label}</span>
+            </button>
+          ))}
+        </div>
+        <button onClick={() => onPick(null)} className="w-full mt-3 py-2 text-xs transition-opacity hover:opacity-60"
+          style={{ color: 'rgba(255,255,255,0.2)' }}>skip</button>
+      </div>
+    </div>
+  )
+}
+
+// ─── AVATAR PICKER ────────────────────────────────────────────────────────────
+
+const AVATAR_EMOJIS = ['🦁','🦊','🐺','🦅','🐬','🦋','🌊','⚡','🔥','🌙','🌟','🎭','🧭','🔮','🎯']
+
+function AvatarPicker({ value, onChange }) {
+  return (
+    <div className="mb-3">
+      <p className="text-xs mb-2 font-semibold" style={{ color: 'rgba(255,255,255,0.4)' }}>Pick your avatar</p>
+      <div className="flex flex-wrap gap-2">
+        {AVATAR_EMOJIS.map(em => (
+          <button key={em} onClick={() => onChange(em)}
+            className="w-10 h-10 rounded-xl text-xl flex items-center justify-center transition-all hover:scale-110"
+            style={{
+              background: value === em ? 'rgba(139,92,246,0.25)' : 'rgba(255,255,255,0.05)',
+              border: value === em ? '2px solid rgba(139,92,246,0.7)' : '1.5px solid rgba(255,255,255,0.08)',
+              transform: value === em ? 'scale(1.15)' : undefined,
+            }}>
+            {em}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── GAMIFICATION BADGES ──────────────────────────────────────────────────────
+
+const ALL_BADGES = [
+  { id: 'first_swipe',    emoji: '🃏', label: 'First Swipe',       desc: 'Started the journey',   check: (liked, matches) => liked.length >= 1 },
+  { id: 'explorer',       emoji: '🗺️', label: 'Explorer',           desc: '10+ interests liked',   check: (liked) => liked.length >= 10 },
+  { id: 'polymath',       emoji: '🌟', label: 'True Polymath',      desc: '5+ categories covered', check: (liked) => new Set(liked.map(c => c.category)).size >= 5 },
+  { id: 'obsessed',       emoji: '🔥', label: 'Obsessed',           desc: 'Rated one interest Obsessed', check: (liked) => liked.some(c => c.depth === 'obsessed') },
+  { id: 'first_match',    emoji: '🤝', label: 'First Match',        desc: 'Connected with someone', check: (liked, matches) => matches >= 1 },
+  { id: 'social_butterfly', emoji: '🦋', label: 'Social Butterfly', desc: '3+ matches',            check: (liked, matches) => matches >= 3 },
+  { id: 'completionist',  emoji: '🏆', label: 'Completionist',      desc: 'Rated all 10 categories', check: (liked) => new Set(liked.map(c => c.category)).size >= 10 },
+]
+
+function GamificationBadges({ liked, matchCount }) {
+  const earned = ALL_BADGES.filter(b => b.check(liked, matchCount))
+  const locked = ALL_BADGES.filter(b => !b.check(liked, matchCount))
+  if (!liked.length) return null
+  return (
+    <div className="mb-8">
+      <h2 className="font-bold text-base mb-3" style={{ fontFamily: 'Fraunces, serif', color: 'rgba(255,255,255,0.85)' }}>
+        Badges {earned.length > 0 && <span className="text-xs font-normal ml-1" style={{ color: '#fbbf24' }}>{earned.length}/{ALL_BADGES.length} unlocked</span>}
+      </h2>
+      <div className="flex flex-wrap gap-2">
+        {earned.map(b => (
+          <div key={b.id} title={b.desc}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.25)', color: '#fbbf24' }}>
+            {b.emoji} {b.label}
+          </div>
+        ))}
+        {locked.slice(0, 3).map(b => (
+          <div key={b.id} title={`Lock: ${b.desc}`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.2)' }}>
+            🔒 {b.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── DISCOVER FILTERS ─────────────────────────────────────────────────────────
+
+function DiscoverFilters({ filters, onChange, archetypes }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mb-4">
+      <button onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all"
+        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)' }}>
+        ⚙️ Filters {(filters.minMatch > 0 || filters.category || filters.archetype) ? '●' : ''}
+      </button>
+      {open && (
+        <div className="mt-2 rounded-2xl p-4 space-y-3"
+          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div>
+            <label className="text-xs font-semibold block mb-1.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+              Min. match % — {filters.minMatch}%
+            </label>
+            <input type="range" min={0} max={80} step={10} value={filters.minMatch}
+              onChange={e => onChange({ ...filters, minMatch: +e.target.value })}
+              className="w-full accent-violet-500" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold block mb-1.5" style={{ color: 'rgba(255,255,255,0.4)' }}>Category</label>
+            <div className="flex flex-wrap gap-1.5">
+              {['', ...Object.keys(CATEGORY_LABELS)].map(cat => (
+                <button key={cat} onClick={() => onChange({ ...filters, category: cat })}
+                  className="px-2.5 py-1 rounded-full text-xs font-semibold transition-all"
+                  style={{
+                    background: filters.category === cat ? `${CATEGORY_COLORS[cat] ?? '#8b5cf6'}20` : 'rgba(255,255,255,0.05)',
+                    border: filters.category === cat ? `1px solid ${CATEGORY_COLORS[cat] ?? '#8b5cf6'}50` : '1px solid rgba(255,255,255,0.08)',
+                    color: filters.category === cat ? (CATEGORY_COLORS[cat] ?? '#8b5cf6') : 'rgba(255,255,255,0.35)',
+                  }}>
+                  {cat ? CATEGORY_LABELS[cat] : 'Any'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button onClick={() => onChange({ minMatch: 0, category: '', archetype: '' })}
+            className="text-xs transition-opacity hover:opacity-70" style={{ color: 'rgba(255,255,255,0.25)' }}>
+            Reset filters
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── CHAT SCREEN ──────────────────────────────────────────────────────────────
+
+function ChatScreen({ user, matchId, theirProfile, myProfile, onBack }) {
+  const [messages, setMessages] = useState([])
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const bottomRef = useRef(null)
+
+  useEffect(() => {
+    getMessages(matchId).then(({ data }) => setMessages(data || []))
+
+    // Subscribe to real-time new messages
+    bb.realtime.connect()
+    const sub = bb.realtime.on('messages', { match_id: matchId }, change => {
+      if (change.type === 'change') {
+        getMessages(matchId).then(({ data }) => setMessages(data || []))
+      }
+    })
+    return () => sub?.unsubscribe?.()
+  }, [matchId])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const handleSend = async e => {
+    e.preventDefault()
+    if (!text.trim() || sending) return
+    setSending(true)
+    const content = text.trim()
+    setText('')
+    await sendMessage(matchId, user.id, content)
+    setSending(false)
+  }
+
+  const theirName = theirProfile?.display_name ?? 'Match'
+  const theirEmoji = theirProfile?.avatar_emoji ?? '🌟'
+
+  return (
+    <div className="flex flex-col min-h-screen" style={{ background: '#0a0a0f' }}>
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-4 sticky top-0 z-10"
+        style={{ background: 'rgba(10,10,15,0.95)', borderBottom: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(16px)' }}>
+        <button onClick={onBack} className="text-xl pr-1" style={{ color: 'rgba(255,255,255,0.4)' }}>←</button>
+        <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl"
+          style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)' }}>
+          {theirEmoji}
+        </div>
+        <div>
+          <p className="text-white font-bold text-sm">{theirName}</p>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{theirProfile?.archetype_id ?? 'Polymath'}</p>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        {messages.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-3xl mb-2">👋</p>
+            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>
+              You matched! Say something interesting.
+            </p>
+          </div>
+        )}
+        {messages.map((msg, i) => {
+          const isMe = msg.sender_id === user.id
+          return (
+            <div key={msg.id ?? i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+              <div className="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed"
+                style={isMe
+                  ? { background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white' }
+                  : { background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                {msg.content}
+              </div>
+            </div>
+          )
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <form onSubmit={handleSend} className="px-4 pb-6 pt-3 sticky bottom-0"
+        style={{ background: 'rgba(10,10,15,0.95)', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <div className="flex gap-2">
+          <input value={text} onChange={e => setText(e.target.value)}
+            placeholder="Say something…"
+            className="flex-1 px-4 py-3 rounded-xl text-sm text-white outline-none"
+            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }} />
+          <button type="submit" disabled={!text.trim() || sending}
+            className="px-4 py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.05]"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', opacity: (!text.trim() || sending) ? 0.5 : 1 }}>
+            →
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+// ─── NOTIFICATION HELPER ──────────────────────────────────────────────────────
+
+async function registerPushNotifications() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js')
+    const perm = await Notification.requestPermission()
+    if (perm !== 'granted') return null
+    return reg
+  } catch { return null }
+}
+
 // ─── MATCHING CTA SECTION ─────────────────────────────────────────────────────
 
 // Inline SVG icons for OAuth providers
@@ -910,10 +1198,12 @@ function OAuthDivider() {
 }
 
 function MatchingCTASection({ user, archetype, liked, scores, recommendations, onSaved, onGoDiscover }) {
-  const [mode, setMode] = useState('cta') // cta | signup | signin | verify
+  const [mode, setMode] = useState('cta') // cta | signup | signin | verify | magic | magic-verify
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [magicCode, setMagicCode] = useState('')
+  const [avatar, setAvatar] = useState(archetype?.emoji ?? '🌟')
   const [showPw, setShowPw] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -936,10 +1226,8 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
       const { data, error: authErr } = await signUp({ name, email, password })
       if (authErr) { setError(authErr.message || 'Sign-up failed'); setLoading(false); return }
       const userId = data?.user?.id ?? data?.session?.user?.id
-      if (!userId) {
-        setMode('verify'); setLoading(false); return
-      }
-      await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name })
+      if (!userId) { setMode('verify'); setLoading(false); return }
+      await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name, avatarEmoji: avatar })
       setSaved(true)
       onSaved?.(data.user ?? data.session?.user)
     } catch (err) {
@@ -958,7 +1246,42 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
       if (userId) {
         const { data: existing } = await getMyProfile(userId)
         if (!existing?.[0]) {
-          await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name || email.split('@')[0] })
+          await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name || email.split('@')[0], avatarEmoji: avatar })
+        }
+        setSaved(true)
+        onSaved?.(data.user ?? data.session?.user)
+      }
+    } catch (err) {
+      setError(err.message || 'Something went wrong')
+    }
+    setLoading(false)
+  }
+
+  const handleSendMagicLink = async e => {
+    e.preventDefault()
+    setLoading(true); setError(null)
+    try {
+      const { error: mlErr } = await sendMagicLink(email)
+      if (mlErr) { setError(mlErr.message || 'Failed to send link'); setLoading(false); return }
+      setMode('magic-verify')
+    } catch (err) {
+      setError(err.message || 'Something went wrong')
+    }
+    setLoading(false)
+  }
+
+  const handleVerifyMagicLink = async e => {
+    e.preventDefault()
+    setLoading(true); setError(null)
+    try {
+      const { data, error: mlErr } = await verifyMagicLink(email, magicCode)
+      if (mlErr) { setError(mlErr.message || 'Invalid code'); setLoading(false); return }
+      const userId = data?.user?.id ?? data?.session?.user?.id
+      if (userId) {
+        const { data: existing } = await getMyProfile(userId)
+        if (!existing?.[0]) {
+          await saveProfile(userId, { archetype, liked, scores, recommendations,
+            displayName: email.split('@')[0], avatarEmoji: avatar })
         }
         setSaved(true)
         onSaved?.(data.user ?? data.session?.user)
@@ -997,6 +1320,54 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
         </p>
         <button onClick={() => setMode('signin')} className="mt-4 text-xs transition-opacity hover:opacity-70" style={{ color: 'rgba(139,92,246,0.8)' }}>
           Already verified? Sign in →
+        </button>
+      </div>
+    )
+  }
+
+  if (mode === 'magic') {
+    return (
+      <div className="rounded-3xl p-6 mb-8"
+        style={{ background: 'linear-gradient(145deg,#1a1428,#120e20)', border: '1px solid rgba(139,92,246,0.25)' }}>
+        <button onClick={() => setMode('cta')} className="text-xs mb-4 transition-opacity hover:opacity-70" style={{ color: 'rgba(255,255,255,0.3)' }}>← back</button>
+        <h3 className="text-white font-bold text-xl mb-1" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>Magic link sign in</h3>
+        <p className="text-sm mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>No password needed — we'll email you a code.</p>
+        {error && <div className="rounded-xl px-4 py-2.5 mb-3 text-sm" style={{ background: 'rgba(239,68,68,0.12)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.2)' }}>{error}</div>}
+        <form onSubmit={handleSendMagicLink} className="space-y-2.5">
+          <input type="email" placeholder="Your email" value={email} onChange={e => setEmail(e.target.value)} required
+            className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+          <button type="submit" disabled={loading}
+            className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', opacity: loading ? 0.7 : 1 }}>
+            {loading ? 'Sending…' : 'Send Magic Link →'}
+          </button>
+        </form>
+      </div>
+    )
+  }
+
+  if (mode === 'magic-verify') {
+    return (
+      <div className="rounded-3xl p-6 mb-8"
+        style={{ background: 'linear-gradient(145deg,#1a1428,#120e20)', border: '1px solid rgba(139,92,246,0.25)' }}>
+        <div className="text-4xl mb-3 text-center">✉️</div>
+        <p className="text-white font-bold text-lg mb-1 text-center" style={{ fontFamily: 'Fraunces, serif' }}>Enter your code</p>
+        <p className="text-sm mb-4 text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>Check {email} for a 6-digit code.</p>
+        {error && <div className="rounded-xl px-4 py-2.5 mb-3 text-sm" style={{ background: 'rgba(239,68,68,0.12)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.2)' }}>{error}</div>}
+        <form onSubmit={handleVerifyMagicLink} className="space-y-2.5">
+          <input type="text" placeholder="123456" value={magicCode} onChange={e => setMagicCode(e.target.value)} required
+            inputMode="numeric" maxLength={6}
+            className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none text-center tracking-[0.3em] text-lg font-bold"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+          <button type="submit" disabled={loading}
+            className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', opacity: loading ? 0.7 : 1 }}>
+            {loading ? 'Verifying…' : 'Verify & Sign In →'}
+          </button>
+        </form>
+        <button onClick={() => setMode('magic')} className="w-full py-2 mt-2 text-xs transition-opacity hover:opacity-70" style={{ color: 'rgba(255,255,255,0.3)' }}>
+          Resend code
         </button>
       </div>
     )
@@ -1063,6 +1434,7 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
           {error}
         </div>
       )}
+      {isSignUp && <AvatarPicker value={avatar} onChange={setAvatar} />}
       <form onSubmit={isSignUp ? handleSignUp : handleSignIn} className="space-y-2.5">
         {isSignUp && (
           <input type="text" placeholder="Your name" value={name} onChange={e => setName(e.target.value)} required
@@ -1086,11 +1458,18 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
           {loading ? (isSignUp ? 'Creating account…' : 'Signing in…') : (isSignUp ? 'Create Account →' : 'Sign In →')}
         </button>
       </form>
-      <button onClick={() => setMode(isSignUp ? 'signin' : 'signup')}
-        className="w-full py-2 mt-2 text-xs transition-opacity hover:opacity-70"
-        style={{ color: 'rgba(255,255,255,0.3)' }}>
-        {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-      </button>
+      <div className="flex justify-between mt-2">
+        <button onClick={() => setMode(isSignUp ? 'signin' : 'signup')}
+          className="py-2 text-xs transition-opacity hover:opacity-70"
+          style={{ color: 'rgba(255,255,255,0.3)' }}>
+          {isSignUp ? 'Sign in instead' : 'Sign up instead'}
+        </button>
+        <button onClick={() => setMode('magic')}
+          className="py-2 text-xs transition-opacity hover:opacity-70"
+          style={{ color: 'rgba(139,92,246,0.6)' }}>
+          ✨ Magic link
+        </button>
+      </div>
     </div>
   )
 }
@@ -1191,6 +1570,8 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
   const [exiting, setExiting] = useState(null)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
+  const [filters, setFilters] = useState({ minMatch: 0, category: '', archetype: '' })
+  const [whyMatch, setWhyMatch] = useState({}) // profileUserId → explanation string
 
   const isDeciding = useRef(false)
   const indexRef = useRef(0)
@@ -1203,6 +1584,48 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
       setLoading(false)
     })
   }, [user.id])
+
+  // Fetch Claude "why we match" for current card
+  useEffect(() => {
+    if (!profiles.length) return
+    const filteredProfiles = applyFilters(profiles)
+    if (!filteredProfiles[index]) return
+    const p = filteredProfiles[index]
+    if (whyMatch[p.user_id] !== undefined) return // already fetched
+    const myScores = myProfile?.category_scores
+    const theirScores = p.category_scores
+    if (!myScores || !theirScores) return
+    const myTopCats = Object.entries(myScores).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k)
+    const theirTopCats = Object.entries(theirScores).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k)
+    const shared = myTopCats.filter(c => theirTopCats.includes(c)).map(c => CATEGORY_LABELS[c])
+    if (!shared.length) { setWhyMatch(w => ({ ...w, [p.user_id]: '' })); return }
+    const myArch = myArchetype?.name ?? 'Explorer'
+    const theirArch = ALL_ARCHETYPES.find(a => a.id === p.archetype_id)?.name ?? 'Explorer'
+    const theirName = p.display_name ?? 'this person'
+    const prompt = `In exactly one sentence (max 20 words), explain why a "${myArch}" and a "${theirArch}" who both love ${shared.join(' and ')} would be great friends. Be specific and intriguing.`
+    const apiKey = localStorage.getItem('claude_api_key')
+    if (!apiKey) { setWhyMatch(w => ({ ...w, [p.user_id]: '' })); return }
+    setWhyMatch(w => ({ ...w, [p.user_id]: '…' }))
+    fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-calls': 'true' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 60, messages: [{ role: 'user', content: prompt }] }),
+    }).then(r => r.json()).then(d => {
+      const text = d.content?.[0]?.text?.trim() ?? ''
+      setWhyMatch(w => ({ ...w, [p.user_id]: text }))
+    }).catch(() => setWhyMatch(w => ({ ...w, [p.user_id]: '' })))
+  }, [index, profiles, myProfile, myArchetype, whyMatch])
+
+  const applyFilters = (profs) => profs.filter(p => {
+    const compat = compatibilityScore(myProfile?.category_scores, p.category_scores)
+    if (filters.minMatch > 0 && compat < filters.minMatch) return false
+    if (filters.category) {
+      const liked = (p.liked_card_ids || []).map(id => CARDS.find(c => c.id === id)).filter(Boolean)
+      if (!liked.some(c => c.category === filters.category)) return false
+    }
+    if (filters.archetype && p.archetype_id !== filters.archetype) return false
+    return true
+  })
 
   const decide = useCallback(async (direction) => {
     if (isDeciding.current || indexRef.current >= profiles.length) return
@@ -1269,27 +1692,33 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
     )
   }
 
-  if (profiles.length === 0 || index >= profiles.length) {
+  const filteredProfiles = applyFilters(profiles)
+
+  if (filteredProfiles.length === 0 || index >= filteredProfiles.length) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={{ background: '#0a0a0f', paddingBottom: 80 }}>
-        <div className="text-5xl mb-4">🌌</div>
-        <h2 className="text-white text-2xl font-bold mb-2" style={{ fontFamily: 'Fraunces, serif' }}>
-          {profiles.length === 0 ? "You're the first one here" : "You've seen everyone"}
-        </h2>
-        <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          Share Polymath with people you know — the more who join, the better your matches.
-        </p>
+      <div className="min-h-screen flex flex-col items-center pt-8 px-4" style={{ background: '#0a0a0f', paddingBottom: 80 }}>
+        <DiscoverFilters filters={filters} onChange={f => { setFilters(f); setIndex(0) }} />
+        <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
+          <div className="text-5xl mb-4">🌌</div>
+          <h2 className="text-white text-2xl font-bold mb-2" style={{ fontFamily: 'Fraunces, serif' }}>
+            {profiles.length === 0 ? "You're the first one here" : "You've seen everyone"}
+          </h2>
+          <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            Share Polymath with people you know — the more who join, the better your matches.
+          </p>
+        </div>
       </div>
     )
   }
 
-  const profile = profiles[index]
-  const nextProfile = profiles[index + 1]
+  const profile = filteredProfiles[index]
+  const nextProfile = filteredProfiles[index + 1]
   const scores = profile.category_scores || {}
   const compat = compatibilityScore(myProfile?.category_scores, scores)
   const archName = ALL_ARCHETYPES.find(a => a.id === profile.archetype_id)
   const likedCards = (profile.liked_card_ids || []).map(id => CARDS.find(c => c.id === id)).filter(Boolean)
   const top5 = likedCards.slice(0, 5)
+  const explanation = whyMatch[profile.user_id]
 
   const rotation = offset.x * 0.1
   const swipeDir = offset.x > 50 ? 'right' : offset.x < -50 ? 'left' : null
@@ -1310,11 +1739,12 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center select-none"
       style={{ background: '#0a0a0f', paddingBottom: 96 }}>
-      <div className="w-full max-w-xs px-6 mb-5">
-        <div className="flex items-center justify-between mb-1">
+      <div className="w-full max-w-xs px-4 mb-2">
+        <div className="flex items-center justify-between mb-2">
           <span className="text-white font-bold text-xl" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>discover</span>
-          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{profiles.length - index} left</span>
+          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{filteredProfiles.length - index} left</span>
         </div>
+        <DiscoverFilters filters={filters} onChange={f => { setFilters(f); setIndex(0) }} />
       </div>
 
       <div className="relative" style={{ width: 320, height: 480 }}>
@@ -1371,10 +1801,19 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
 
             {/* Compatibility */}
             {compat > 0 && (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full"
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full mb-2"
                 style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)' }}>
                 <span className="text-xs font-bold" style={{ color: '#8b5cf6' }}>{compat}% compatible</span>
               </div>
+            )}
+            {/* AI "why we match" */}
+            {explanation && explanation !== '…' && (
+              <p className="text-center text-xs leading-relaxed px-2" style={{ color: 'rgba(255,255,255,0.45)', fontStyle: 'italic' }}>
+                "{explanation}"
+              </p>
+            )}
+            {explanation === '…' && (
+              <p className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>✨ analyzing match…</p>
             )}
           </div>
 
@@ -1402,15 +1841,15 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
 
 // ─── MY MATCHES SCREEN ────────────────────────────────────────────────────────
 
-function MyMatchesScreen({ user, myArchetype }) {
+function MyMatchesScreen({ user, myArchetype, myProfile }) {
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [matchProfiles, setMatchProfiles] = useState({})
+  const [chatMatch, setChatMatch] = useState(null) // { matchId, theirProfile }
 
   useEffect(() => {
     getMyMatches(user.id).then(async ({ data }) => {
       setMatches(data || [])
-      // Fetch other person's profile for each match
       const others = (data || []).map(m => m.user_a_id === user.id ? m.user_b_id : m.user_a_id)
       const fetched = {}
       await Promise.all(others.map(async uid => {
@@ -1421,6 +1860,18 @@ function MyMatchesScreen({ user, myArchetype }) {
       setLoading(false)
     })
   }, [user.id])
+
+  if (chatMatch) {
+    return (
+      <ChatScreen
+        user={user}
+        matchId={chatMatch.matchId}
+        theirProfile={chatMatch.theirProfile}
+        myProfile={myProfile}
+        onBack={() => setChatMatch(null)}
+      />
+    )
+  }
 
   if (loading) {
     return (
@@ -1439,7 +1890,7 @@ function MyMatchesScreen({ user, myArchetype }) {
             My Matches
           </h1>
           <p className="text-sm" style={{ color: 'rgba(255,255,255,0.35)' }}>
-            {matches.length === 0 ? 'No matches yet — keep discovering' : `${matches.length} connection${matches.length !== 1 ? 's' : ''}`}
+            {matches.length === 0 ? 'No matches yet — keep discovering' : `${matches.length} connection${matches.length !== 1 ? 's' : ''} · tap to chat`}
           </p>
         </div>
 
@@ -1456,28 +1907,23 @@ function MyMatchesScreen({ user, myArchetype }) {
               const otherId = match.user_a_id === user.id ? match.user_b_id : match.user_a_id
               const other = matchProfiles[otherId]
               const otherArch = ALL_ARCHETYPES.find(a => a.id === other?.archetype_id)
-              const compat = compatibilityScore(
-                bb.sessionManager.getSession()?.user ? {} : {},
-                other?.category_scores
-              )
+              const compat = compatibilityScore(myProfile?.category_scores, other?.category_scores)
               return (
-                <div key={i} className="rounded-2xl p-4 flex items-center gap-4"
+                <button key={i} onClick={() => setChatMatch({ matchId: match.id, theirProfile: other })}
+                  className="w-full rounded-2xl p-4 flex items-center gap-4 transition-all hover:scale-[1.01] active:scale-[0.99]"
                   style={{ background: 'linear-gradient(145deg,#1a1428,#141428)', border: '1px solid rgba(139,92,246,0.2)' }}>
                   <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0"
                     style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)' }}>
                     {other?.avatar_emoji || otherArch?.emoji || '👤'}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 text-left">
                     <p className="text-white font-semibold text-sm truncate">{other?.display_name || 'Anonymous'}</p>
                     <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                      {otherArch?.name || 'Explorer'}
+                      {otherArch?.name || 'Explorer'} {compat > 0 ? `· ${compat}% match` : ''}
                     </p>
                   </div>
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0"
-                    style={{ background: 'rgba(139,92,246,0.12)', color: '#8b5cf6', border: '1px solid rgba(139,92,246,0.25)' }}>
-                    Matched
-                  </span>
-                </div>
+                  <span className="text-lg flex-shrink-0" style={{ color: 'rgba(255,255,255,0.2)' }}>💬</span>
+                </button>
               )
             })}
           </div>
@@ -1521,6 +1967,32 @@ function WrappedCard({ archetype, liked, innerRef }) {
           Top {archetype.rarity}% of curious minds
         </div>
         <div style={{ marginTop:24, fontSize:10, color:'rgba(255,255,255,0.2)', letterSpacing:2 }}>POLYMATH.APP</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── PUSH NOTIFICATION BANNER ────────────────────────────────────────────────
+
+function PushNotificationBanner() {
+  const [dismissed, setDismissed] = useState(false)
+  if (dismissed) return null
+  return (
+    <div className="rounded-2xl p-4 mb-6 flex items-center gap-3"
+      style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
+      <span className="text-2xl">🔔</span>
+      <div className="flex-1">
+        <p className="text-white text-sm font-semibold">Get match alerts</p>
+        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>Know instantly when someone connects with you</p>
+      </div>
+      <div className="flex flex-col gap-1">
+        <button onClick={async () => { await registerPushNotifications(); setDismissed(true) }}
+          className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-[1.03]"
+          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white' }}>
+          Enable
+        </button>
+        <button onClick={() => setDismissed(true)} className="text-xs transition-opacity hover:opacity-60"
+          style={{ color: 'rgba(255,255,255,0.2)' }}>Later</button>
       </div>
     </div>
   )
@@ -1653,16 +2125,22 @@ function ProfileScreen({ archetype, liked, recommendations, onRestart, user, sco
           <RadarChart scores={scores} size={280} />
         </div>
 
+        <GamificationBadges liked={liked} matchCount={0} />
+
         {liked.length > 0 && (
           <div className="mb-7">
             <h2 className="font-bold text-base mb-3" style={{ fontFamily: 'Fraunces, serif', color: 'rgba(255,255,255,0.85)' }}>My Interests</h2>
             <div className="flex flex-wrap gap-2">
-              {liked.map(card => (
-                <span key={card.id} className="px-3 py-1.5 rounded-full text-sm"
-                  style={{ background: `${CATEGORY_COLORS[card.category]}12`, color: CATEGORY_COLORS[card.category], border: `1px solid ${CATEGORY_COLORS[card.category]}28` }}>
-                  {card.emoji} {card.label}
-                </span>
-              ))}
+              {liked.map(card => {
+                const depthOpt = DEPTH_OPTIONS.find(d => d.key === card.depth)
+                return (
+                  <span key={card.id} className="px-3 py-1.5 rounded-full text-sm flex items-center gap-1"
+                    style={{ background: `${CATEGORY_COLORS[card.category]}12`, color: CATEGORY_COLORS[card.category], border: `1px solid ${CATEGORY_COLORS[card.category]}28` }}>
+                    {card.emoji} {card.label}
+                    {depthOpt && <span title={depthOpt.label} className="text-xs">{depthOpt.emoji}</span>}
+                  </span>
+                )
+              })}
             </div>
           </div>
         )}
@@ -1731,6 +2209,11 @@ function ProfileScreen({ archetype, liked, recommendations, onRestart, user, sco
           onSaved={onSaved}
           onGoDiscover={onGoDiscover}
         />
+
+        {/* Push notifications opt-in */}
+        {user && 'Notification' in window && Notification.permission === 'default' && (
+          <PushNotificationBanner />
+        )}
 
         {/* Wrapped card */}
         <div className="text-center mb-4">
@@ -1921,7 +2404,7 @@ export default function App() {
             />
           )}
           {tab === 'matches' && user && (
-            <MyMatchesScreen user={user} myArchetype={archetype} />
+            <MyMatchesScreen user={user} myArchetype={archetype} myProfile={dbProfile} />
           )}
           {user && (
             <BottomNav tab={tab} onTab={setTab} matchCount={matchCount} />

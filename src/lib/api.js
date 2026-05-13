@@ -5,9 +5,6 @@ import { bb } from './butterbase.js'
 export const signUp = ({ name, email, password }) =>
   bb.auth.signUp({ email, password, metadata: { display_name: name } })
 
-export const signInWithOAuth = (provider) =>
-  bb.auth.signInWithOAuth({ provider, redirectTo: window.location.origin })
-
 export const signIn = ({ email, password }) =>
   bb.auth.signIn({ email, password })
 
@@ -17,9 +14,16 @@ export const getSession = () => bb.sessionManager.getSession()
 
 export const onAuthStateChange = (cb) => bb.onAuthStateChange(cb)
 
+export const signInWithOAuth = (provider) =>
+  bb.auth.signInWithOAuth({ provider, redirectTo: window.location.origin })
+
+export const sendMagicLink = (email) => bb.auth.sendMagicLink(email)
+
+export const verifyMagicLink = (email, code) => bb.auth.verifyMagicLink(email, code)
+
 // ─── PROFILES ─────────────────────────────────────────────────────────────────
 
-export const saveProfile = (userId, { archetype, liked, scores, recommendations, displayName }) =>
+export const saveProfile = (userId, { archetype, liked, scores, recommendations, displayName, avatarEmoji, depthScores }) =>
   bb.from('profiles').insert({
     user_id: userId,
     archetype_id: archetype.id,
@@ -27,14 +31,17 @@ export const saveProfile = (userId, { archetype, liked, scores, recommendations,
     category_scores: scores,
     recommendations,
     display_name: displayName,
-    avatar_emoji: archetype.emoji,
+    avatar_emoji: avatarEmoji ?? archetype.emoji,
+    depth_scores: depthScores ?? {},
   })
+
+export const updateProfile = (userId, updates) =>
+  bb.from('profiles').update(updates).eq('user_id', userId)
 
 export const getMyProfile = (userId) =>
   bb.from('profiles').select('*').eq('user_id', userId).limit(1)
 
 export const getDiscoveryProfiles = async (myUserId, limit = 30) => {
-  // Get IDs I've already swiped on so we can exclude them
   const { data: mySwipes } = await bb.from('swipes')
     .select('swiped_id')
     .eq('swiper_id', myUserId)
@@ -80,6 +87,14 @@ export const getMyMatches = async (userId) => {
   all.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
   return { data: all, error: null }
 }
+
+// ─── MESSAGES ─────────────────────────────────────────────────────────────────
+
+export const getMessages = (matchId) =>
+  bb.from('messages').select('*').eq('match_id', matchId)
+
+export const sendMessage = (matchId, senderId, content) =>
+  bb.from('messages').insert({ match_id: matchId, sender_id: senderId, content })
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 
