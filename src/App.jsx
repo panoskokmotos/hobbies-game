@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Heart, X, ChevronRight, Download, Copy, Check, RefreshCw, Share2, Zap, User, Compass, MessageCircle, LogOut, Eye, EyeOff } from 'lucide-react'
 import { bb } from './lib/butterbase.js'
 import {
-  signUp, signIn, signOut, getSession, onAuthStateChange,
+  signUp, signIn, signOut, signInWithOAuth, getSession, onAuthStateChange,
   saveProfile, getMyProfile, getDiscoveryProfiles,
   recordSwipe, checkMutualLike, createMatch, getMyMatches,
   compatibilityScore,
@@ -63,6 +63,11 @@ const CARDS = [
   { id: 49, emoji: '🃏', label: 'Tarot',             category: 'spiritual'   },
   { id: 50, emoji: '🌱', label: 'Permaculture',      category: 'exploration' },
 ]
+
+// 5 seed cards — one per high-signal dimension, shown first to generate a quick archetype teaser
+const SEED_CARD_IDS = new Set([1, 8, 3, 10, 4]) // Running, Writing, Philosophy, Hosting, Solo Travel
+const SEED_CARDS  = CARDS.filter(c => SEED_CARD_IDS.has(c.id))
+const EXTRA_CARDS = CARDS.filter(c => !SEED_CARD_IDS.has(c.id))
 
 const CATEGORIES = ['physical', 'music', 'mind', 'creative', 'exploration', 'social', 'craft', 'tech', 'culinary', 'spiritual']
 
@@ -453,7 +458,7 @@ function ReturningUserScreen({ saved, onContinue, onRestart }) {
 
 // ─── SWIPE SCREEN ─────────────────────────────────────────────────────────────
 
-function SwipeScreen({ onComplete }) {
+function SwipeScreen({ onComplete, cards = SEED_CARDS }) {
   const [index, setIndex] = useState(0)
   const [liked, setLiked] = useState([])
   const [exiting, setExiting] = useState(null)
@@ -481,7 +486,7 @@ function SwipeScreen({ onComplete }) {
     setExiting(direction)
     setDragging(false)
 
-    const currentCard = CARDS[indexRef.current]
+    const currentCard = cards[indexRef.current]
     const currentLiked = likedRef.current
 
     setTimeout(() => {
@@ -497,7 +502,7 @@ function SwipeScreen({ onComplete }) {
       isDeciding.current = false
       dragStart.current = null
 
-      if (newIndex >= CARDS.length) onComplete(newLiked)
+      if (newIndex >= cards.length) onComplete(newLiked)
     }, 380)
   }, [onComplete, playSwipe])
 
@@ -528,11 +533,11 @@ function SwipeScreen({ onComplete }) {
     dragStart.current = null
   }
 
-  if (index >= CARDS.length) return null
+  if (index >= cards.length) return null
 
-  const card = CARDS[index]
-  const nextCard = CARDS[index + 1]
-  const thirdCard = CARDS[index + 2]
+  const card = cards[index]
+  const nextCard = cards[index + 1]
+  const thirdCard = cards[index + 2]
   const rotation = offset.x * 0.1
   const swipeDir = offset.x > 50 ? 'right' : offset.x < -50 ? 'left' : null
   const rightOpacity = Math.min(1, Math.max(0, offset.x / 90))
@@ -558,11 +563,11 @@ function SwipeScreen({ onComplete }) {
           <span className="text-white font-bold text-xl" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
             polymath
           </span>
-          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{index}/{CARDS.length}</span>
+          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{index}/{cards.length}</span>
         </div>
         <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
           <div className="h-full rounded-full transition-all duration-300"
-            style={{ width: `${(index / CARDS.length) * 100}%`, background: 'linear-gradient(90deg,#f59e0b,#fbbf24)' }} />
+            style={{ width: `${(index / cards.length) * 100}%`, background: 'linear-gradient(90deg,#f59e0b,#fbbf24)' }} />
         </div>
         {liked.length > 0 && (
           <p className="text-xs mt-1.5 text-right" style={{ color: 'rgba(251,191,36,0.7)' }}>
@@ -874,8 +879,38 @@ function MatchesScreen({ onNext }) {
 
 // ─── MATCHING CTA SECTION ─────────────────────────────────────────────────────
 
+// Inline SVG icons for OAuth providers
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+      <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+      <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+    </svg>
+  )
+}
+
+function AppleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+      <path d="M14.093 9.461c-.015-1.594.653-2.8 2.003-3.686-.753-1.076-1.884-1.67-3.37-1.795-1.407-.12-2.937.822-3.497.822-.591 0-1.956-.783-3.02-.783C4.09 4.055 2 5.695 2 9.032c0 .983.18 1.998.54 3.044.48 1.376 2.212 4.748 4.016 4.693.99-.023 1.69-.706 2.976-.706 1.247 0 1.893.706 3.012.706 1.821-.027 3.392-3.1 3.856-4.48-2.445-1.149-2.307-3.37-2.307-3.828zM11.598 2.7c1.1-1.302.993-2.49.96-2.7-1.005.057-2.165.69-2.852 1.464-.75.833-1.26 1.862-1.163 3.024 1.1.085 2.097-.49 3.055-1.788z"/>
+    </svg>
+  )
+}
+
+function OAuthDivider() {
+  return (
+    <div className="flex items-center gap-3 my-3">
+      <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+      <span className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>or</span>
+      <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+    </div>
+  )
+}
+
 function MatchingCTASection({ user, archetype, liked, scores, recommendations, onSaved, onGoDiscover }) {
-  const [mode, setMode] = useState('cta') // cta | signup | signin
+  const [mode, setMode] = useState('cta') // cta | signup | signin | verify
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -884,16 +919,31 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
   const [error, setError] = useState(null)
   const [saved, setSaved] = useState(false)
 
+  const handleOAuth = (provider) => {
+    if (archetype) saveState(archetype, liked, recommendations)
+    try {
+      const { url } = signInWithOAuth(provider)
+      window.location.href = url
+    } catch (err) {
+      setError('OAuth not configured for this provider yet.')
+    }
+  }
+
   const handleSignUp = async e => {
     e.preventDefault()
     setLoading(true); setError(null)
-    const { data, error: authErr } = await signUp({ name, email, password })
-    if (authErr) { setError(authErr.message); setLoading(false); return }
-    const userId = data?.user?.id
-    if (userId) {
+    try {
+      const { data, error: authErr } = await signUp({ name, email, password })
+      if (authErr) { setError(authErr.message || 'Sign-up failed'); setLoading(false); return }
+      const userId = data?.user?.id ?? data?.session?.user?.id
+      if (!userId) {
+        setMode('verify'); setLoading(false); return
+      }
       await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name })
       setSaved(true)
-      onSaved?.(data.user)
+      onSaved?.(data.user ?? data.session?.user)
+    } catch (err) {
+      setError(err.message || 'Something went wrong')
     }
     setLoading(false)
   }
@@ -901,52 +951,71 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
   const handleSignIn = async e => {
     e.preventDefault()
     setLoading(true); setError(null)
-    const { data, error: authErr } = await signIn({ email, password })
-    if (authErr) { setError(authErr.message); setLoading(false); return }
-    const userId = data?.user?.id
-    if (userId) {
-      const { data: existing } = await getMyProfile(userId)
-      if (!existing?.[0]) {
-        await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name || email.split('@')[0] })
+    try {
+      const { data, error: authErr } = await signIn({ email, password })
+      if (authErr) { setError(authErr.message || 'Sign-in failed'); setLoading(false); return }
+      const userId = data?.user?.id ?? data?.session?.user?.id
+      if (userId) {
+        const { data: existing } = await getMyProfile(userId)
+        if (!existing?.[0]) {
+          await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name || email.split('@')[0] })
+        }
+        setSaved(true)
+        onSaved?.(data.user ?? data.session?.user)
       }
-      setSaved(true)
-      onSaved?.(data.user)
+    } catch (err) {
+      setError(err.message || 'Something went wrong')
     }
     setLoading(false)
   }
 
-  // Already logged in
-  if (user) {
+  const successCard = (
+    <div className="rounded-3xl p-6 mb-8 text-center"
+      style={{ background: 'linear-gradient(145deg,rgba(16,185,129,0.08),rgba(16,185,129,0.04))', border: '1px solid rgba(16,185,129,0.2)' }}>
+      <div className="text-3xl mb-3">✅</div>
+      <p className="text-white font-bold text-lg mb-1" style={{ fontFamily: 'Fraunces, serif' }}>You're in</p>
+      <p className="text-sm mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>Profile saved. Start meeting your people.</p>
+      <button onClick={onGoDiscover}
+        className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
+        style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white' }}>
+        Discover People →
+      </button>
+    </div>
+  )
+
+  if (user) return successCard
+  if (saved) return successCard
+
+  if (mode === 'verify') {
     return (
       <div className="rounded-3xl p-6 mb-8 text-center"
-        style={{ background: 'linear-gradient(145deg,rgba(16,185,129,0.08),rgba(16,185,129,0.04))', border: '1px solid rgba(16,185,129,0.2)' }}>
-        <div className="text-3xl mb-3">✅</div>
-        <p className="text-white font-bold text-lg mb-1" style={{ fontFamily: 'Fraunces, serif' }}>Profile saved</p>
-        <p className="text-sm mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>You're in. Start discovering people like you.</p>
-        <button onClick={onGoDiscover}
-          className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white' }}>
-          Discover People →
+        style={{ background: 'linear-gradient(145deg,#1a1428,#120e20)', border: '1px solid rgba(139,92,246,0.25)' }}>
+        <div className="text-4xl mb-3">📬</div>
+        <p className="text-white font-bold text-lg mb-1" style={{ fontFamily: 'Fraunces, serif' }}>Check your inbox</p>
+        <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+          We sent a verification link to <strong style={{ color: 'rgba(255,255,255,0.7)' }}>{email}</strong>. Click it to activate your account.
+        </p>
+        <button onClick={() => setMode('signin')} className="mt-4 text-xs transition-opacity hover:opacity-70" style={{ color: 'rgba(139,92,246,0.8)' }}>
+          Already verified? Sign in →
         </button>
       </div>
     )
   }
 
-  if (saved) {
-    return (
-      <div className="rounded-3xl p-6 mb-8 text-center"
-        style={{ background: 'linear-gradient(145deg,rgba(16,185,129,0.08),rgba(16,185,129,0.04))', border: '1px solid rgba(16,185,129,0.2)' }}>
-        <div className="text-3xl mb-3">✅</div>
-        <p className="text-white font-bold text-lg mb-1" style={{ fontFamily: 'Fraunces, serif' }}>You're in</p>
-        <p className="text-sm mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>Profile saved. Start meeting your people.</p>
-        <button onClick={onGoDiscover}
-          className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white' }}>
-          Discover People →
-        </button>
-      </div>
-    )
-  }
+  const oauthButtons = (
+    <div className="space-y-2 mb-4">
+      <button onClick={() => handleOAuth('google')}
+        className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2.5 transition-all hover:scale-[1.02]"
+        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
+        <GoogleIcon /> Continue with Google
+      </button>
+      <button onClick={() => handleOAuth('apple')}
+        className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2.5 transition-all hover:scale-[1.02]"
+        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
+        <AppleIcon /> Continue with Apple
+      </button>
+    </div>
+  )
 
   if (mode === 'cta') {
     return (
@@ -959,13 +1028,15 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
         <h3 className="text-white font-bold text-xl mb-1" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
           Meet real people
         </h3>
-        <p className="text-sm mb-5 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+        <p className="text-sm mb-4 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
           Swipe on real profiles matched to your archetype. Find your intellectual soulmates.
         </p>
+        {oauthButtons}
+        <OAuthDivider />
         <button onClick={() => setMode('signup')}
-          className="w-full py-3.5 rounded-xl font-bold text-sm mb-2 transition-all hover:scale-[1.02]"
+          className="w-full py-3 rounded-xl font-bold text-sm mb-2 transition-all hover:scale-[1.02]"
           style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white' }}>
-          Create Free Account →
+          Sign up with email →
         </button>
         <button onClick={() => setMode('signin')}
           className="w-full py-2.5 rounded-xl text-sm transition-opacity hover:opacity-70"
@@ -982,9 +1053,11 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
       style={{ background: 'linear-gradient(145deg,#1a1428,#120e20)', border: '1px solid rgba(139,92,246,0.25)' }}>
       <button onClick={() => setMode('cta')} className="text-xs mb-4 transition-opacity hover:opacity-70"
         style={{ color: 'rgba(255,255,255,0.3)' }}>← back</button>
-      <h3 className="text-white font-bold text-xl mb-4" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
+      <h3 className="text-white font-bold text-xl mb-3" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
         {isSignUp ? 'Create your account' : 'Welcome back'}
       </h3>
+      {oauthButtons}
+      <OAuthDivider />
       {error && (
         <div className="rounded-xl px-4 py-2.5 mb-3 text-sm" style={{ background: 'rgba(239,68,68,0.12)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.2)' }}>
           {error}
@@ -1010,7 +1083,7 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
         <button type="submit" disabled={loading}
           className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
           style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', opacity: loading ? 0.7 : 1 }}>
-          {loading ? (isSignUp ? 'Creating account…' : 'Signing in…') : (isSignUp ? 'Save Profile & Continue →' : 'Sign In →')}
+          {loading ? (isSignUp ? 'Creating account…' : 'Signing in…') : (isSignUp ? 'Create Account →' : 'Sign In →')}
         </button>
       </form>
       <button onClick={() => setMode(isSignUp ? 'signin' : 'signup')}
@@ -1453,9 +1526,67 @@ function WrappedCard({ archetype, liked, innerRef }) {
   )
 }
 
+// ─── TEASER SCREEN ────────────────────────────────────────────────────────────
+
+function TeaserScreen({ archetype, liked, onContinue, onSkip }) {
+  const scores = computeScores(liked)
+  const topCats = Object.entries(scores)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([cat]) => CATEGORY_LABELS[cat])
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-5"
+      style={{ background: '#0a0a0f' }}>
+      <div className="max-w-xs w-full text-center animate-fade-up">
+        <p className="text-xs font-bold uppercase tracking-widest mb-4"
+          style={{ color: 'rgba(139,92,246,0.8)' }}>We're seeing something…</p>
+
+        <div className="relative inline-block mb-6">
+          <div className="text-7xl mb-3" style={{ filter: 'blur(2px)', opacity: 0.4 }}>
+            {archetype.emoji}
+          </div>
+          <h1 className="text-white leading-tight mb-1"
+            style={{ fontFamily: 'Fraunces, serif', fontWeight: 900, fontSize: 30,
+              letterSpacing: '-0.03em', filter: 'blur(5px)', userSelect: 'none' }}>
+            {archetype.name}
+          </h1>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="px-4 py-1.5 rounded-xl"
+              style={{ background: 'rgba(10,10,15,0.8)', border: '1px solid rgba(139,92,246,0.35)' }}>
+              <span className="font-bold text-sm" style={{ color: '#a78bfa' }}>🔒 Unlock your archetype</span>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-sm leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          Your top interests span <strong style={{ color: 'rgba(255,255,255,0.8)' }}>
+          {topCats.join(', ')}</strong>. We know exactly who you are — create an account to find out.
+        </p>
+
+        <div className="flex justify-center mb-8" style={{ filter: 'blur(3px)', opacity: 0.35, pointerEvents: 'none' }}>
+          <RadarChart scores={scores} size={160} />
+        </div>
+
+        <button onClick={onContinue}
+          className="w-full py-4 rounded-2xl font-bold text-base mb-3 transition-all hover:scale-[1.02]"
+          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white',
+            boxShadow: '0 0 30px rgba(139,92,246,0.4)' }}>
+          Unlock My Full Profile →
+        </button>
+        <button onClick={onSkip}
+          className="w-full py-2.5 text-sm transition-opacity hover:opacity-60"
+          style={{ color: 'rgba(255,255,255,0.3)' }}>
+          Skip for now
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── PROFILE SCREEN ───────────────────────────────────────────────────────────
 
-function ProfileScreen({ archetype, liked, recommendations, onRestart, user, scores: scoresProp, onSaved, onGoDiscover }) {
+function ProfileScreen({ archetype, liked, recommendations, onRestart, user, scores: scoresProp, onSaved, onGoDiscover, onAddMore }) {
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const scores = scoresProp ?? computeScores(liked)
@@ -1575,11 +1706,20 @@ function ProfileScreen({ archetype, liked, recommendations, onRestart, user, sco
           </button>
         </div>
 
-        <button onClick={onRestart}
-          className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 mb-10 transition-all duration-200 hover:opacity-70"
-          style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          <RefreshCw size={14} /> Start over
-        </button>
+        <div className="flex gap-2 mb-10">
+          {onAddMore && (
+            <button onClick={onAddMore}
+              className="flex-1 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-1.5 transition-all duration-200 hover:scale-[1.02]"
+              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)', color: '#a78bfa' }}>
+              + More interests
+            </button>
+          )}
+          <button onClick={onRestart}
+            className="flex-1 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-200 hover:opacity-70"
+            style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <RefreshCw size={14} /> Start over
+          </button>
+        </div>
 
         {/* Auth / Matching CTA */}
         <MatchingCTASection
@@ -1635,7 +1775,24 @@ export default function App() {
       setUser(u)
       if (u) {
         getMyProfile(u.id).then(({ data }) => {
-          if (data?.[0]) setDbProfile(data[0])
+          if (data?.[0]) {
+            setDbProfile(data[0])
+          } else {
+            // New OAuth user returning from redirect — auto-save profile from localStorage
+            const stored = loadState()
+            if (stored?.archetype) {
+              const sc = computeScores(stored.liked)
+              saveProfile(u.id, {
+                archetype: stored.archetype,
+                liked: stored.liked,
+                scores: sc,
+                recommendations: stored.recommendations,
+                displayName: u.email?.split('@')[0] ?? 'Polymath',
+              }).then(() => getMyProfile(u.id)).then(({ data: d }) => {
+                if (d?.[0]) setDbProfile(d[0])
+              })
+            }
+          }
         })
       } else {
         setDbProfile(null)
@@ -1663,11 +1820,25 @@ export default function App() {
 
   useEffect(() => { window.scrollTo(0, 0) }, [screen, tab])
 
-  const handleSwipeComplete = useCallback(likedCards => {
+  // After 5 seed cards: show teaser, then archetype reveal chain
+  const handleSeedComplete = useCallback(likedCards => {
     setLiked(likedCards)
     setArchetype(computeArchetype(likedCards))
-    setScreen('archetype')
+    setScreen('teaser')
   }, [])
+
+  // After extra cards: merge liked lists, recompute archetype, go to profile
+  const handleExtraComplete = useCallback(extraLiked => {
+    setLiked(prev => {
+      const merged = [...prev, ...extraLiked]
+      setArchetype(computeArchetype(merged))
+      return merged
+    })
+    setScreen('profile')
+  }, [])
+
+  const handleTeaserContinue = () => setScreen('recommendations')
+  const handleTeaserSkip = () => setScreen('recommendations')
 
   const handleMatchesComplete = () => {
     saveState(archetype, liked, recommendations)
@@ -1700,7 +1871,17 @@ export default function App() {
           onRestart={handleRestart}
         />
       )}
-      {screen === 'swipe' && <SwipeScreen onComplete={handleSwipeComplete} />}
+      {/* Seed swipe — only 5 cards */}
+      {screen === 'swipe' && <SwipeScreen cards={SEED_CARDS} onComplete={handleSeedComplete} />}
+      {/* Teaser — blurred reveal + auth gate */}
+      {screen === 'teaser' && archetype && (
+        <TeaserScreen
+          archetype={archetype}
+          liked={liked}
+          onContinue={handleTeaserContinue}
+          onSkip={handleTeaserSkip}
+        />
+      )}
       {screen === 'archetype' && archetype && (
         <ArchetypeScreen archetype={archetype} liked={liked} onNext={() => setScreen('recommendations')} />
       )}
@@ -1709,6 +1890,10 @@ export default function App() {
       )}
       {screen === 'matches' && (
         <MatchesScreen archetype={archetype} onNext={handleMatchesComplete} />
+      )}
+      {/* Extra cards — optional second round with remaining 45 */}
+      {screen === 'extra' && (
+        <SwipeScreen cards={EXTRA_CARDS} onComplete={handleExtraComplete} />
       )}
       {screen === 'profile' && archetype && (
         <>
@@ -1722,6 +1907,9 @@ export default function App() {
               scores={scores}
               onSaved={handleProfileSaved}
               onGoDiscover={() => setTab('discover')}
+              onAddMore={liked.length < EXTRA_CARDS.length + SEED_CARDS.length
+                ? () => setScreen('extra')
+                : null}
             />
           )}
           {tab === 'discover' && user && (

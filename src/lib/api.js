@@ -3,7 +3,10 @@ import { bb } from './butterbase.js'
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 
 export const signUp = ({ name, email, password }) =>
-  bb.auth.signUp({ email, password })
+  bb.auth.signUp({ email, password, metadata: { display_name: name } })
+
+export const signInWithOAuth = (provider) =>
+  bb.auth.signInWithOAuth({ provider, redirectTo: window.location.origin })
 
 export const signIn = ({ email, password }) =>
   bb.auth.signIn({ email, password })
