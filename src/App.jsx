@@ -1,5 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Heart, X, ChevronRight, Download, Copy, Check, RefreshCw, Share2, Zap } from 'lucide-react'
+import { Heart, X, ChevronRight, Download, Copy, Check, RefreshCw, Share2, Zap, User, Compass, MessageCircle, LogOut, Eye, EyeOff } from 'lucide-react'
+import { bb } from './lib/butterbase.js'
+import {
+  signUp, signIn, signOut, getSession, onAuthStateChange,
+  saveProfile, getMyProfile, getDiscoveryProfiles,
+  recordSwipe, checkMutualLike, createMatch, getMyMatches,
+  compatibilityScore,
+} from './lib/api.js'
 
 // ─── CARD DATA (50 cards) ─────────────────────────────────────────────────────
 
@@ -865,87 +872,544 @@ function MatchesScreen({ onNext }) {
   )
 }
 
-// ─── WAITLIST SECTION ─────────────────────────────────────────────────────────
+// ─── MATCHING CTA SECTION ─────────────────────────────────────────────────────
 
-function WaitlistSection({ archetype }) {
+function MatchingCTASection({ user, archetype, liked, scores, recommendations, onSaved, onGoDiscover }) {
+  const [mode, setMode] = useState('cta') // cta | signup | signin
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [status, setStatus] = useState(() =>
-    localStorage.getItem('polymath_waitlist') ? 'done' : 'idle'
-  )
+  const [password, setPassword] = useState('')
+  const [showPw, setShowPw] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [saved, setSaved] = useState(false)
 
-  const handleSubmit = async e => {
+  const handleSignUp = async e => {
     e.preventDefault()
-    setStatus('loading')
-    try {
-      // Swap in your Formspree / Mailchimp / Supabase endpoint here
-      await fetch('https://formspree.io/f/YOUR_FORM_ID', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, archetype: archetype.name }),
-      })
-    } catch {}
-    localStorage.setItem('polymath_waitlist', email)
-    setStatus('done')
+    setLoading(true); setError(null)
+    const { data, error: authErr } = await signUp({ name, email, password })
+    if (authErr) { setError(authErr.message); setLoading(false); return }
+    const userId = data?.user?.id
+    if (userId) {
+      await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name })
+      setSaved(true)
+      onSaved?.(data.user)
+    }
+    setLoading(false)
   }
 
-  if (status === 'done') {
+  const handleSignIn = async e => {
+    e.preventDefault()
+    setLoading(true); setError(null)
+    const { data, error: authErr } = await signIn({ email, password })
+    if (authErr) { setError(authErr.message); setLoading(false); return }
+    const userId = data?.user?.id
+    if (userId) {
+      const { data: existing } = await getMyProfile(userId)
+      if (!existing?.[0]) {
+        await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name || email.split('@')[0] })
+      }
+      setSaved(true)
+      onSaved?.(data.user)
+    }
+    setLoading(false)
+  }
+
+  // Already logged in
+  if (user) {
     return (
-      <div className="rounded-3xl p-8 text-center mb-8"
+      <div className="rounded-3xl p-6 mb-8 text-center"
         style={{ background: 'linear-gradient(145deg,rgba(16,185,129,0.08),rgba(16,185,129,0.04))', border: '1px solid rgba(16,185,129,0.2)' }}>
         <div className="text-3xl mb-3">✅</div>
-        <p className="text-white font-bold text-lg mb-1" style={{ fontFamily: 'Fraunces, serif' }}>
-          You're on the list
+        <p className="text-white font-bold text-lg mb-1" style={{ fontFamily: 'Fraunces, serif' }}>Profile saved</p>
+        <p className="text-sm mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>You're in. Start discovering people like you.</p>
+        <button onClick={onGoDiscover}
+          className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
+          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white' }}>
+          Discover People →
+        </button>
+      </div>
+    )
+  }
+
+  if (saved) {
+    return (
+      <div className="rounded-3xl p-6 mb-8 text-center"
+        style={{ background: 'linear-gradient(145deg,rgba(16,185,129,0.08),rgba(16,185,129,0.04))', border: '1px solid rgba(16,185,129,0.2)' }}>
+        <div className="text-3xl mb-3">✅</div>
+        <p className="text-white font-bold text-lg mb-1" style={{ fontFamily: 'Fraunces, serif' }}>You're in</p>
+        <p className="text-sm mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>Profile saved. Start meeting your people.</p>
+        <button onClick={onGoDiscover}
+          className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
+          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white' }}>
+          Discover People →
+        </button>
+      </div>
+    )
+  }
+
+  if (mode === 'cta') {
+    return (
+      <div className="rounded-3xl p-6 mb-8"
+        style={{ background: 'linear-gradient(145deg,#1a1428,#120e20)', border: '1px solid rgba(139,92,246,0.25)' }}>
+        <div className="flex items-center gap-2 mb-1">
+          <Zap size={16} color="#8b5cf6" />
+          <span className="text-xs font-bold uppercase tracking-widest" style={{ color: '#8b5cf6' }}>Now live</span>
+        </div>
+        <h3 className="text-white font-bold text-xl mb-1" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
+          Meet real people
+        </h3>
+        <p className="text-sm mb-5 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+          Swipe on real profiles matched to your archetype. Find your intellectual soulmates.
         </p>
-        <p className="text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          We'll reach you the moment real matching goes live.
+        <button onClick={() => setMode('signup')}
+          className="w-full py-3.5 rounded-xl font-bold text-sm mb-2 transition-all hover:scale-[1.02]"
+          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white' }}>
+          Create Free Account →
+        </button>
+        <button onClick={() => setMode('signin')}
+          className="w-full py-2.5 rounded-xl text-sm transition-opacity hover:opacity-70"
+          style={{ color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          Already have an account? Sign in
+        </button>
+      </div>
+    )
+  }
+
+  const isSignUp = mode === 'signup'
+  return (
+    <div className="rounded-3xl p-6 mb-8"
+      style={{ background: 'linear-gradient(145deg,#1a1428,#120e20)', border: '1px solid rgba(139,92,246,0.25)' }}>
+      <button onClick={() => setMode('cta')} className="text-xs mb-4 transition-opacity hover:opacity-70"
+        style={{ color: 'rgba(255,255,255,0.3)' }}>← back</button>
+      <h3 className="text-white font-bold text-xl mb-4" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
+        {isSignUp ? 'Create your account' : 'Welcome back'}
+      </h3>
+      {error && (
+        <div className="rounded-xl px-4 py-2.5 mb-3 text-sm" style={{ background: 'rgba(239,68,68,0.12)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.2)' }}>
+          {error}
+        </div>
+      )}
+      <form onSubmit={isSignUp ? handleSignUp : handleSignIn} className="space-y-2.5">
+        {isSignUp && (
+          <input type="text" placeholder="Your name" value={name} onChange={e => setName(e.target.value)} required
+            className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+        )}
+        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required
+          className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none"
+          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+        <div className="relative">
+          <input type={showPw ? 'text' : 'password'} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required
+            className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none pr-10"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+          <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+          </button>
+        </div>
+        <button type="submit" disabled={loading}
+          className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
+          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', opacity: loading ? 0.7 : 1 }}>
+          {loading ? (isSignUp ? 'Creating account…' : 'Signing in…') : (isSignUp ? 'Save Profile & Continue →' : 'Sign In →')}
+        </button>
+      </form>
+      <button onClick={() => setMode(isSignUp ? 'signin' : 'signup')}
+        className="w-full py-2 mt-2 text-xs transition-opacity hover:opacity-70"
+        style={{ color: 'rgba(255,255,255,0.3)' }}>
+        {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+      </button>
+    </div>
+  )
+}
+
+// ─── BOTTOM NAV ───────────────────────────────────────────────────────────────
+
+function BottomNav({ tab, onTab, matchCount = 0 }) {
+  const tabs = [
+    { id: 'profile',  label: 'Profile',  icon: User },
+    { id: 'discover', label: 'Discover', icon: Compass },
+    { id: 'matches',  label: 'Matches',  icon: MessageCircle, badge: matchCount },
+  ]
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-50"
+      style={{ background: 'rgba(10,10,15,0.95)', borderTop: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(16px)' }}>
+      <div className="flex max-w-sm mx-auto">
+        {tabs.map(({ id, label, icon: Icon, badge }) => {
+          const active = tab === id
+          return (
+            <button key={id} onClick={() => onTab(id)}
+              className="flex-1 py-3 flex flex-col items-center gap-1 transition-all duration-150"
+              style={{ color: active ? '#fbbf24' : 'rgba(255,255,255,0.3)' }}>
+              <div className="relative">
+                <Icon size={20} />
+                {badge > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-xs flex items-center justify-center font-bold"
+                    style={{ background: '#8b5cf6', color: 'white', fontSize: 9 }}>{badge}</span>
+                )}
+              </div>
+              <span className="text-xs font-medium">{label}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── MATCH MODAL ──────────────────────────────────────────────────────────────
+
+function MatchModal({ myArchetype, theirProfile, onClose, onDiscover }) {
+  const [phase, setPhase] = useState(0)
+  useEffect(() => { setTimeout(() => setPhase(1), 100) }, [])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-6"
+      style={{ background: 'rgba(10,10,15,0.95)' }}>
+      <div className="absolute inset-0 pointer-events-none animate-glow-pulse"
+        style={{ background: 'radial-gradient(ellipse 70% 50% at 50% 40%, rgba(139,92,246,0.2) 0%, transparent 70%)' }} />
+      <div className="w-full max-w-xs text-center relative z-10"
+        style={{ opacity: phase ? 1 : 0, transform: phase ? 'scale(1)' : 'scale(0.9)', transition: 'all 0.5s cubic-bezier(0.34,1.56,0.64,1)' }}>
+        <div className="text-5xl mb-4">💜</div>
+        <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#8b5cf6' }}>It's a match</p>
+        <h1 className="text-white text-3xl font-bold mb-3 leading-tight" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>
+          You and {theirProfile?.display_name || 'someone'} clicked
+        </h1>
+        <p className="text-sm mb-8 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+          Two {myArchetype?.name} vibes found each other. Start a conversation.
+        </p>
+        <div className="flex justify-center gap-6 mb-8">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl"
+              style={{ background: 'rgba(251,191,36,0.12)', border: '2px solid rgba(251,191,36,0.3)' }}>
+              {myArchetype?.emoji}
+            </div>
+            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>You</span>
+          </div>
+          <div className="self-center text-2xl">✦</div>
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl"
+              style={{ background: 'rgba(139,92,246,0.12)', border: '2px solid rgba(139,92,246,0.3)' }}>
+              {theirProfile?.avatar_emoji || '👤'}
+            </div>
+            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>{theirProfile?.display_name || 'Them'}</span>
+          </div>
+        </div>
+        <button onClick={onDiscover}
+          className="w-full py-4 rounded-2xl text-white font-bold mb-3 transition-all hover:scale-[1.02]"
+          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', boxShadow: '0 0 40px rgba(139,92,246,0.3)' }}>
+          See My Matches
+        </button>
+        <button onClick={onClose}
+          className="w-full py-2.5 rounded-xl text-sm transition-opacity hover:opacity-70"
+          style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          Keep discovering
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── DISCOVER SCREEN ──────────────────────────────────────────────────────────
+
+function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
+  const [profiles, setProfiles] = useState([])
+  const [index, setIndex] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [exiting, setExiting] = useState(null)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [dragging, setDragging] = useState(false)
+
+  const isDeciding = useRef(false)
+  const indexRef = useRef(0)
+  const dragStart = useRef(null)
+  const playSwipe = useSwipeSound()
+
+  useEffect(() => {
+    getDiscoveryProfiles(user.id).then(({ data }) => {
+      setProfiles(data || [])
+      setLoading(false)
+    })
+  }, [user.id])
+
+  const decide = useCallback(async (direction) => {
+    if (isDeciding.current || indexRef.current >= profiles.length) return
+    isDeciding.current = true
+    playSwipe(direction)
+    setExiting(direction)
+
+    const profile = profiles[indexRef.current]
+
+    setTimeout(async () => {
+      await recordSwipe(user.id, profile.user_id, direction === 'right' ? 'like' : 'pass')
+
+      if (direction === 'right') {
+        const mutual = await checkMutualLike(user.id, profile.user_id)
+        if (mutual) {
+          await createMatch(user.id, profile.user_id)
+          onMatch?.(profile)
+        }
+      }
+
+      indexRef.current += 1
+      setIndex(i => i + 1)
+      setOffset({ x: 0, y: 0 })
+      setExiting(null)
+      isDeciding.current = false
+      dragStart.current = null
+    }, 380)
+  }, [profiles, user.id, onMatch, playSwipe])
+
+  useEffect(() => {
+    const onKey = e => {
+      if (e.key === 'ArrowRight') decide('right')
+      if (e.key === 'ArrowLeft') decide('left')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [decide])
+
+  const onPointerDown = e => {
+    if (isDeciding.current) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragStart.current = { x: e.clientX, y: e.clientY }
+    setDragging(true)
+  }
+  const onPointerMove = e => {
+    if (!dragStart.current) return
+    setOffset({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y })
+  }
+  const onPointerUp = () => {
+    if (!dragStart.current) return
+    if (offset.x > 80) decide('right')
+    else if (offset.x < -80) decide('left')
+    else { setOffset({ x: 0, y: 0 }); setDragging(false) }
+    dragStart.current = null
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0a0f', paddingBottom: 80 }}>
+        <div className="relative w-12 h-12">
+          <div className="absolute inset-0 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
+        </div>
+      </div>
+    )
+  }
+
+  if (profiles.length === 0 || index >= profiles.length) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={{ background: '#0a0a0f', paddingBottom: 80 }}>
+        <div className="text-5xl mb-4">🌌</div>
+        <h2 className="text-white text-2xl font-bold mb-2" style={{ fontFamily: 'Fraunces, serif' }}>
+          {profiles.length === 0 ? "You're the first one here" : "You've seen everyone"}
+        </h2>
+        <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
+          Share Polymath with people you know — the more who join, the better your matches.
         </p>
       </div>
     )
   }
 
+  const profile = profiles[index]
+  const nextProfile = profiles[index + 1]
+  const scores = profile.category_scores || {}
+  const compat = compatibilityScore(myProfile?.category_scores, scores)
+  const archName = ALL_ARCHETYPES.find(a => a.id === profile.archetype_id)
+  const likedCards = (profile.liked_card_ids || []).map(id => CARDS.find(c => c.id === id)).filter(Boolean)
+  const top5 = likedCards.slice(0, 5)
+
+  const rotation = offset.x * 0.1
+  const swipeDir = offset.x > 50 ? 'right' : offset.x < -50 ? 'left' : null
+  const rightOpacity = Math.min(1, Math.max(0, offset.x / 90))
+  const leftOpacity = Math.min(1, Math.max(0, -offset.x / 90))
+
+  let cardTransform = `translateX(${offset.x}px) translateY(${offset.y * 0.2}px) rotate(${rotation}deg)`
+  let cardTransition = dragging ? 'none' : 'transform 0.45s cubic-bezier(0.34,1.56,0.64,1)'
+  if (exiting === 'right') { cardTransform = 'translateX(150vw) rotate(30deg)'; cardTransition = 'transform 0.38s ease-in' }
+  if (exiting === 'left')  { cardTransform = 'translateX(-150vw) rotate(-30deg)'; cardTransition = 'transform 0.38s ease-in' }
+
+  const glowColor = swipeDir === 'right'
+    ? '0 0 70px rgba(251,191,36,0.4), 0 30px 80px rgba(0,0,0,0.6)'
+    : swipeDir === 'left'
+    ? '0 0 70px rgba(59,130,246,0.4), 0 30px 80px rgba(0,0,0,0.6)'
+    : '0 30px 80px rgba(0,0,0,0.6)'
+
   return (
-    <div className="rounded-3xl p-6 mb-8"
-      style={{ background: 'linear-gradient(145deg,#1a1428,#120e20)', border: '1px solid rgba(139,92,246,0.25)' }}>
-      <div className="flex items-center gap-2 mb-1">
-        <Zap size={16} color="#8b5cf6" />
-        <span className="text-xs font-bold uppercase tracking-widest" style={{ color: '#8b5cf6' }}>
-          Coming soon
-        </span>
+    <div className="min-h-screen flex flex-col items-center justify-center select-none"
+      style={{ background: '#0a0a0f', paddingBottom: 96 }}>
+      <div className="w-full max-w-xs px-6 mb-5">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-white font-bold text-xl" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>discover</span>
+          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{profiles.length - index} left</span>
+        </div>
       </div>
-      <h3 className="text-white font-bold text-xl mb-1" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
-        Match with real people
-      </h3>
-      <p className="text-sm mb-5 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
-        Swipe on real profiles. Find your intellectual soulmates. Be first when it launches.
-      </p>
-      <form onSubmit={handleSubmit} className="space-y-2.5">
-        <input
-          type="text"
-          placeholder="Your name"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          required
-          className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none transition-all"
-          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
-        />
-        <input
-          type="email"
-          placeholder="Your email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          required
-          className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none transition-all"
-          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
-        />
-        <button
-          type="submit"
-          disabled={status === 'loading'}
-          className="w-full py-3.5 rounded-xl font-bold text-sm transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', opacity: status === 'loading' ? 0.7 : 1 }}>
-          {status === 'loading' ? 'Joining…' : 'Claim My Spot →'}
+
+      <div className="relative" style={{ width: 320, height: 480 }}>
+        {nextProfile && (
+          <div className="absolute inset-0 rounded-3xl"
+            style={{ background: 'linear-gradient(145deg,#181830,#141428)', transform: 'scale(0.93) translateY(16px)', border: '1px solid rgba(255,255,255,0.05)' }} />
+        )}
+        <div
+          className="absolute inset-0 rounded-3xl flex flex-col cursor-grab active:cursor-grabbing overflow-hidden"
+          style={{ background: 'linear-gradient(145deg,#1c1c34,#161628)', border: '1px solid rgba(255,255,255,0.1)', transform: cardTransform, transition: cardTransition, boxShadow: glowColor, touchAction: 'none' }}
+          onPointerDown={onPointerDown} onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
+        >
+          {/* Stamps */}
+          <div className="absolute top-6 left-6 pointer-events-none z-10" style={{ opacity: rightOpacity, transform: 'rotate(-14deg)' }}>
+            <div className="px-3 py-1 rounded-xl" style={{ border: '2.5px solid #fbbf24', background: 'rgba(251,191,36,0.12)' }}>
+              <span className="font-black tracking-widest text-base" style={{ color: '#fbbf24' }}>CONNECT</span>
+            </div>
+          </div>
+          <div className="absolute top-6 right-6 pointer-events-none z-10" style={{ opacity: leftOpacity, transform: 'rotate(14deg)' }}>
+            <div className="px-3 py-1 rounded-xl" style={{ border: '2.5px solid #60a5fa', background: 'rgba(96,165,250,0.12)' }}>
+              <span className="font-black tracking-widest text-base" style={{ color: '#60a5fa' }}>PASS</span>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex flex-col items-center justify-center flex-1 px-6 pt-8 pb-4">
+            {/* Avatar */}
+            <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+              {profile.avatar_emoji || archName?.emoji || '👤'}
+            </div>
+
+            {/* Name + archetype */}
+            <p className="text-white font-bold text-xl mb-1 text-center" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
+              {profile.display_name || 'Anonymous'}
+            </p>
+            <span className="px-3 py-1 rounded-full text-xs font-semibold mb-4"
+              style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)' }}>
+              {archName?.name || 'Explorer'}
+            </span>
+
+            {/* Top interests */}
+            {top5.length > 0 && (
+              <div className="flex gap-2 mb-4 flex-wrap justify-center">
+                {top5.map((c, i) => (
+                  <span key={i} className="px-2.5 py-1 rounded-full text-xs"
+                    style={{ background: `${CATEGORY_COLORS[c.category]}12`, color: CATEGORY_COLORS[c.category], border: `1px solid ${CATEGORY_COLORS[c.category]}28` }}>
+                    {c.emoji} {c.label}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Compatibility */}
+            {compat > 0 && (
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full"
+                style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)' }}>
+                <span className="text-xs font-bold" style={{ color: '#8b5cf6' }}>{compat}% compatible</span>
+              </div>
+            )}
+          </div>
+
+          <p className="text-center pb-4 text-xs pointer-events-none" style={{ color: 'rgba(255,255,255,0.2)' }}>
+            ← drag or arrow keys →
+          </p>
+        </div>
+      </div>
+
+      <div className="flex gap-10 mt-8">
+        <button onClick={() => decide('left')}
+          className="w-16 h-16 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+          style={{ background: 'rgba(96,165,250,0.12)', border: '1.5px solid rgba(96,165,250,0.35)' }}>
+          <X size={26} color="#60a5fa" />
         </button>
-      </form>
+        <button onClick={() => decide('right')}
+          className="w-16 h-16 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+          style={{ background: 'rgba(251,191,36,0.12)', border: '1.5px solid rgba(251,191,36,0.35)' }}>
+          <Heart size={26} color="#fbbf24" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── MY MATCHES SCREEN ────────────────────────────────────────────────────────
+
+function MyMatchesScreen({ user, myArchetype }) {
+  const [matches, setMatches] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [matchProfiles, setMatchProfiles] = useState({})
+
+  useEffect(() => {
+    getMyMatches(user.id).then(async ({ data }) => {
+      setMatches(data || [])
+      // Fetch other person's profile for each match
+      const others = (data || []).map(m => m.user_a_id === user.id ? m.user_b_id : m.user_a_id)
+      const fetched = {}
+      await Promise.all(others.map(async uid => {
+        const { data: pData } = await bb.from('profiles').select('*').eq('user_id', uid).limit(1)
+        if (pData?.[0]) fetched[uid] = pData[0]
+      }))
+      setMatchProfiles(fetched)
+      setLoading(false)
+    })
+  }, [user.id])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0a0f', paddingBottom: 80 }}>
+        <div className="w-12 h-12 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen px-4 py-10" style={{ background: '#0a0a0f', paddingBottom: 100 }}>
+      <div className="max-w-sm mx-auto">
+        <div className="text-center mb-8">
+          <div className="text-4xl mb-3">💜</div>
+          <h1 className="text-white mb-1" style={{ fontFamily: 'Fraunces, serif', fontWeight: 800, fontSize: 30, letterSpacing: '-0.03em' }}>
+            My Matches
+          </h1>
+          <p className="text-sm" style={{ color: 'rgba(255,255,255,0.35)' }}>
+            {matches.length === 0 ? 'No matches yet — keep discovering' : `${matches.length} connection${matches.length !== 1 ? 's' : ''}`}
+          </p>
+        </div>
+
+        {matches.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="text-6xl mb-4">🌌</div>
+            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>
+              Your first match is out there.<br />Head to Discover and find them.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {matches.map((match, i) => {
+              const otherId = match.user_a_id === user.id ? match.user_b_id : match.user_a_id
+              const other = matchProfiles[otherId]
+              const otherArch = ALL_ARCHETYPES.find(a => a.id === other?.archetype_id)
+              const compat = compatibilityScore(
+                bb.sessionManager.getSession()?.user ? {} : {},
+                other?.category_scores
+              )
+              return (
+                <div key={i} className="rounded-2xl p-4 flex items-center gap-4"
+                  style={{ background: 'linear-gradient(145deg,#1a1428,#141428)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0"
+                    style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)' }}>
+                    {other?.avatar_emoji || otherArch?.emoji || '👤'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-semibold text-sm truncate">{other?.display_name || 'Anonymous'}</p>
+                    <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                      {otherArch?.name || 'Explorer'}
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0"
+                    style={{ background: 'rgba(139,92,246,0.12)', color: '#8b5cf6', border: '1px solid rgba(139,92,246,0.25)' }}>
+                    Matched
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -991,10 +1455,10 @@ function WrappedCard({ archetype, liked, innerRef }) {
 
 // ─── PROFILE SCREEN ───────────────────────────────────────────────────────────
 
-function ProfileScreen({ archetype, liked, recommendations, onRestart }) {
+function ProfileScreen({ archetype, liked, recommendations, onRestart, user, scores: scoresProp, onSaved, onGoDiscover }) {
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
-  const scores = computeScores(liked)
+  const scores = scoresProp ?? computeScores(liked)
   const cardRef = useRef(null)
 
   const shareUrl = getShareUrl(archetype, liked)
@@ -1117,8 +1581,16 @@ function ProfileScreen({ archetype, liked, recommendations, onRestart }) {
           <RefreshCw size={14} /> Start over
         </button>
 
-        {/* Waitlist */}
-        <WaitlistSection archetype={archetype} />
+        {/* Auth / Matching CTA */}
+        <MatchingCTASection
+          user={user}
+          archetype={archetype}
+          liked={liked}
+          scores={scores}
+          recommendations={recommendations}
+          onSaved={onSaved}
+          onGoDiscover={onGoDiscover}
+        />
 
         {/* Wrapped card */}
         <div className="text-center mb-4">
@@ -1146,6 +1618,38 @@ export default function App() {
   const [archetype, setArchetype] = useState(null)
   const [recommendations, setRecommendations] = useState(null)
 
+  // Auth + social state
+  const [user, setUser] = useState(null)
+  const [dbProfile, setDbProfile] = useState(null)
+  const [tab, setTab] = useState('profile') // 'profile' | 'discover' | 'matches'
+  const [matchData, setMatchData] = useState(null) // { myArchetype, theirProfile }
+  const [matchCount, setMatchCount] = useState(0)
+
+  // Restore auth session and listen for changes
+  useEffect(() => {
+    const session = getSession()
+    if (session?.user) setUser(session.user)
+
+    const unsub = onAuthStateChange(({ session: s }) => {
+      const u = s?.user ?? null
+      setUser(u)
+      if (u) {
+        getMyProfile(u.id).then(({ data }) => {
+          if (data?.[0]) setDbProfile(data[0])
+        })
+      } else {
+        setDbProfile(null)
+      }
+    })
+    return () => unsub?.()
+  }, [])
+
+  // Keep match badge count fresh
+  useEffect(() => {
+    if (!user) return
+    getMyMatches(user.id).then(({ data }) => setMatchCount((data || []).length))
+  }, [user, matchData])
+
   // Check localStorage on mount
   useEffect(() => {
     const data = loadState()
@@ -1157,7 +1661,7 @@ export default function App() {
     }
   }, [])
 
-  useEffect(() => { window.scrollTo(0, 0) }, [screen])
+  useEffect(() => { window.scrollTo(0, 0) }, [screen, tab])
 
   const handleSwipeComplete = useCallback(likedCards => {
     setLiked(likedCards)
@@ -1176,10 +1680,19 @@ export default function App() {
     setScreen('swipe')
   }
 
+  const handleProfileSaved = (profile) => {
+    setDbProfile(profile)
+    setTab('discover')
+  }
+
+  const scores = archetype ? computeScores(liked) : null
+
   if (screen === 'loading') return null
 
+  const showSocialUI = screen === 'profile' && archetype && user
+
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0f' }}>
+    <div style={{ minHeight: '100vh', background: '#0a0a0f', paddingBottom: showSocialUI ? 72 : 0 }}>
       {screen === 'returning' && saved && (
         <ReturningUserScreen
           saved={saved}
@@ -1198,7 +1711,43 @@ export default function App() {
         <MatchesScreen archetype={archetype} onNext={handleMatchesComplete} />
       )}
       {screen === 'profile' && archetype && (
-        <ProfileScreen archetype={archetype} liked={liked} recommendations={recommendations} onRestart={handleRestart} />
+        <>
+          {tab === 'profile' && (
+            <ProfileScreen
+              archetype={archetype}
+              liked={liked}
+              recommendations={recommendations}
+              onRestart={handleRestart}
+              user={user}
+              scores={scores}
+              onSaved={handleProfileSaved}
+              onGoDiscover={() => setTab('discover')}
+            />
+          )}
+          {tab === 'discover' && user && (
+            <DiscoverScreen
+              user={user}
+              myProfile={dbProfile}
+              myArchetype={archetype}
+              onMatch={(theirProfile) => setMatchData({ myArchetype: archetype, theirProfile })}
+            />
+          )}
+          {tab === 'matches' && user && (
+            <MyMatchesScreen user={user} myArchetype={archetype} />
+          )}
+          {user && (
+            <BottomNav tab={tab} onTab={setTab} matchCount={matchCount} />
+          )}
+        </>
+      )}
+
+      {matchData && (
+        <MatchModal
+          myArchetype={matchData.myArchetype}
+          theirProfile={matchData.theirProfile}
+          onClose={() => setMatchData(null)}
+          onDiscover={() => { setMatchData(null); setTab('matches') }}
+        />
       )}
     </div>
   )
