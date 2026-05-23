@@ -4,8 +4,9 @@ import { bb } from './lib/butterbase.js'
 import {
   signUp, signIn, signOut, signInWithGoogle, signInWithApple,
   getSession, onAuthStateChange,
-  saveProfile, getMyProfile, getDiscoveryProfiles,
+  saveProfile, getMyProfile, updateProfile, getDiscoveryProfiles,
   recordSwipe, checkMutualLike, createMatch, getMyMatches,
+  getMessages, sendMessage, getAdmirers,
   compatibilityScore,
 } from './lib/api.js'
 
@@ -988,8 +989,7 @@ function RecommendationsScreen({ liked, onNext }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [phase, setPhase] = useState(0)
-  const [apiKey, setApiKey] = useState(import.meta.env.VITE_ANTHROPIC_API_KEY || '')
-  const [showKeyInput, setShowKeyInput] = useState(false)
+  const [apiKey] = useState(import.meta.env.VITE_ANTHROPIC_API_KEY || '')
   const [usingFallback, setUsingFallback] = useState(false)
   const hasFetched = useRef(false)
 
@@ -1037,28 +1037,8 @@ function RecommendationsScreen({ liked, onNext }) {
             Your Expansion Map
           </h1>
           <p className="text-sm" style={{ color: 'rgba(255,255,255,0.35)' }}>
-            {usingFallback ? 'Demo recommendations' : 'AI-curated for your profile'}
+            {usingFallback ? 'Curated for your interests' : 'AI-curated for your profile'}
           </p>
-          {usingFallback && !loading && (
-            <div className="mt-3">
-              {showKeyInput ? (
-                <form onSubmit={e => { e.preventDefault(); setShowKeyInput(false); hasFetched.current = false; fetchRecs(apiKey) }} className="flex gap-2">
-                  <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-                    placeholder="sk-ant-…" autoFocus
-                    className="flex-1 px-3 py-2 rounded-xl text-sm text-white outline-none"
-                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)' }} />
-                  <button type="submit" className="px-4 py-2 rounded-xl text-sm font-semibold"
-                    style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>Go</button>
-                </form>
-              ) : (
-                <button onClick={() => setShowKeyInput(true)}
-                  className="text-xs px-3 py-1.5 rounded-full"
-                  style={{ color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.08)' }}>
-                  + Add API key for real AI
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
         {loading ? (
@@ -1494,6 +1474,7 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
   const [exiting, setExiting] = useState(null)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
+  const [admirer, setAdmirer] = useState(null) // { userId, profile? }
 
   const isDeciding = useRef(false)
   const indexRef = useRef(0)
@@ -1501,8 +1482,19 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
   const playSwipe = useSwipeSound()
 
   useEffect(() => {
-    getDiscoveryProfiles(user.id).then(({ data }) => {
-      setProfiles(data || [])
+    Promise.all([
+      getDiscoveryProfiles(user.id),
+      getAdmirers(user.id),
+    ]).then(async ([{ data: profileData }, admireIds]) => {
+      const regular = profileData || []
+      setProfiles(regular)
+      // Find one admirer not already in the deck
+      const deckIds = new Set(regular.map(p => p.user_id))
+      const freshAdmirerId = admireIds.find(id => !deckIds.has(id))
+      if (freshAdmirerId) {
+        const { data: ap } = await bb.from('profiles').select('*').eq('user_id', freshAdmirerId).limit(1)
+        setAdmirer({ userId: freshAdmirerId, profile: ap?.[0] || null })
+      }
       setLoading(false)
     })
   }, [user.id])
@@ -1523,8 +1515,11 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
         if (mutual) {
           await createMatch(user.id, profile.user_id)
           onMatch?.(profile)
+          if (admirer?.userId === profile.user_id) setAdmirer(null)
         }
       }
+      // Swiped past the admirer without a match — clear teaser
+      if (admirer?.userId === profile.user_id) setAdmirer(null)
 
       indexRef.current += 1
       setIndex(i => i + 1)
@@ -1582,6 +1577,24 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
         navigator.clipboard.writeText(window.location.origin).catch(() => {})
       }
     }
+
+    // Daily discovery card — date-seeded from un-liked cards
+    const myLikedIdsEmpty = new Set(myProfile?.liked_card_ids || [])
+    const unlikedCards = CARDS.filter(c => !myLikedIdsEmpty.has(c.id))
+    const todayKey = new Date().toDateString()
+    const seedNum = [...todayKey].reduce((acc, c) => acc + c.charCodeAt(0), 0)
+    const todayCard = unlikedCards.length > 0 ? unlikedCards[seedNum % unlikedCards.length] : null
+    const dailyDoneKey = `polymath_daily_${todayKey}`
+    const [dailyAdded, setDailyAdded] = useState(() => !!localStorage.getItem(dailyDoneKey))
+
+    const handleAddDailyCard = async () => {
+      if (!todayCard || dailyAdded) return
+      const newIds = [...(myProfile?.liked_card_ids || []), todayCard.id]
+      await updateProfile(user.id, { liked_card_ids: newIds })
+      localStorage.setItem(dailyDoneKey, '1')
+      setDailyAdded(true)
+    }
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={{ background: '#0a0a0f', paddingBottom: 80 }}>
         <div className="text-5xl mb-4">🌌</div>
@@ -1595,10 +1608,34 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
         </p>
         <button
           onClick={handleInvite}
-          className="px-6 py-3 rounded-2xl font-bold text-sm transition-all hover:scale-[1.03] active:scale-[0.97]"
+          className="px-6 py-3 rounded-2xl font-bold text-sm mb-8 transition-all hover:scale-[1.03] active:scale-[0.97]"
           style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', boxShadow: '0 0 30px rgba(139,92,246,0.3)' }}>
           {isEmpty ? '✨ Invite friends & unlock matches' : '🔗 Invite more people'}
         </button>
+
+        {todayCard && (
+          <div className="w-full max-w-xs">
+            <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: 'rgba(255,255,255,0.25)' }}>Today's discovery</p>
+            <div className="rounded-2xl p-5 text-center mb-3"
+              style={{ background: `${CATEGORY_COLORS[todayCard.category]}0d`, border: `1px solid ${CATEGORY_COLORS[todayCard.category]}30` }}>
+              <div className="text-4xl mb-2">{todayCard.emoji}</div>
+              <p className="text-white font-bold text-lg mb-1" style={{ fontFamily: 'Fraunces, serif' }}>{todayCard.label}</p>
+              <p className="text-xs mb-3" style={{ color: CATEGORY_COLORS[todayCard.category] }}>{CATEGORY_LABELS[todayCard.category]}</p>
+              <button
+                onClick={handleAddDailyCard}
+                disabled={dailyAdded}
+                className="w-full py-2.5 rounded-xl text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{
+                  background: dailyAdded ? 'rgba(16,185,129,0.12)' : `${CATEGORY_COLORS[todayCard.category]}20`,
+                  color: dailyAdded ? '#10b981' : CATEGORY_COLORS[todayCard.category],
+                  border: `1px solid ${dailyAdded ? 'rgba(16,185,129,0.35)' : `${CATEGORY_COLORS[todayCard.category]}40`}`,
+                }}>
+                {dailyAdded ? '✓ Added to your profile' : '+ Add to my profile'}
+              </button>
+            </div>
+            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>Come back tomorrow for a new one.</p>
+          </div>
+        )}
       </div>
     )
   }
@@ -1637,6 +1674,18 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
           <span className="text-white font-bold text-xl" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>discover</span>
           <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{profiles.length - index} left</span>
         </div>
+        {admirer && (
+          <div className="mt-2 flex items-center gap-2.5 px-3 py-2 rounded-xl"
+            style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)' }}>
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0"
+              style={{ background: 'rgba(139,92,246,0.2)', filter: 'blur(0px)' }}>
+              👤
+            </div>
+            <p className="text-xs leading-tight flex-1" style={{ color: 'rgba(255,255,255,0.6)' }}>
+              <span style={{ color: '#a78bfa', fontWeight: 600 }}>Someone</span> already likes your profile — keep swiping to find them
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="relative" style={{ width: 320, height: 480 }}>
@@ -1737,12 +1786,143 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
   )
 }
 
+// ─── CHAT SCREEN ──────────────────────────────────────────────────────────────
+
+function ChatScreen({ match, otherProfile, otherArch, myLikedCards, user, onClose }) {
+  const [messages, setMessages] = useState([])
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [phase, setPhase] = useState(0)
+  const bottomRef = useRef(null)
+  const pollRef = useRef(null)
+
+  const sharedIds = new Set(otherProfile?.liked_card_ids || [])
+  const sharedCards = (myLikedCards || []).filter(c => sharedIds.has(c.id)).slice(0, 3)
+  const icebreakers = sharedCards.map(c => `What got you into ${c.emoji} ${c.label}?`)
+  if (icebreakers.length < 3) icebreakers.push("What's the most surprising thing you're into?", "What would you do with an extra hour every day?")
+
+  const loadMessages = useCallback(async () => {
+    const { data } = await getMessages(match.id)
+    setMessages(data || [])
+  }, [match.id])
+
+  useEffect(() => {
+    loadMessages()
+    setTimeout(() => setPhase(1), 80)
+    pollRef.current = setInterval(loadMessages, 5000)
+    return () => clearInterval(pollRef.current)
+  }, [loadMessages])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const handleSend = async (content = text) => {
+    const trimmed = content.trim()
+    if (!trimmed || sending) return
+    setSending(true)
+    setText('')
+    const optimistic = { id: Date.now(), sender_id: user.id, content: trimmed, created_at: new Date().toISOString() }
+    setMessages(prev => [...prev, optimistic])
+    await sendMessage(match.id, user.id, trimmed)
+    setSending(false)
+    await loadMessages()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col"
+      style={{ background: '#0a0a0f', transform: phase ? 'translateY(0)' : 'translateY(100%)', transition: 'transform 0.4s cubic-bezier(0.16,1,0.3,1)' }}>
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 pt-12 pb-4 flex-shrink-0"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <button onClick={onClose} className="w-9 h-9 rounded-full flex items-center justify-center transition-opacity hover:opacity-70"
+          style={{ background: 'rgba(255,255,255,0.07)' }}>
+          <X size={18} color="rgba(255,255,255,0.6)" />
+        </button>
+        <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl flex-shrink-0"
+          style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)' }}>
+          {otherProfile?.avatar_emoji || otherArch?.emoji || '👤'}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-white font-semibold text-sm truncate">{otherProfile?.display_name || 'Anonymous'}</p>
+          <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.35)' }}>{otherArch?.name || 'Explorer'}</p>
+        </div>
+        {sharedCards.length > 0 && (
+          <div className="flex gap-1">
+            {sharedCards.map((c, i) => <span key={i} className="text-base">{c.emoji}</span>)}
+          </div>
+        )}
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        {messages.length === 0 && (
+          <div className="text-center py-8">
+            <p className="text-sm mb-1" style={{ color: 'rgba(255,255,255,0.3)' }}>Start with a question</p>
+            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.18)' }}>or tap a suggestion below</p>
+          </div>
+        )}
+        {messages.map((msg, i) => {
+          const mine = msg.sender_id === user.id
+          return (
+            <div key={msg.id || i} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+              <div className="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed"
+                style={mine
+                  ? { background: 'rgba(251,191,36,0.18)', color: '#fde68a', borderBottomRightRadius: 6 }
+                  : { background: 'rgba(139,92,246,0.18)', color: '#c4b5fd', borderBottomLeftRadius: 6 }}>
+                {msg.content}
+              </div>
+            </div>
+          )
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Icebreaker chips */}
+      {messages.length === 0 && (
+        <div className="px-4 pb-3 flex gap-2 overflow-x-auto flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
+          {icebreakers.slice(0, 3).map((q, i) => (
+            <button key={i} onClick={() => handleSend(q)}
+              className="flex-shrink-0 px-3 py-2 rounded-full text-xs font-medium transition-opacity hover:opacity-80"
+              style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.1)', whiteSpace: 'nowrap' }}>
+              {q}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Input bar */}
+      <div className="px-4 pb-8 pt-3 flex-shrink-0"
+        style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <div className="flex gap-3 items-end">
+          <input
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+            placeholder="Say something…"
+            className="flex-1 px-4 py-3 rounded-2xl text-sm text-white outline-none"
+            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', caretColor: '#fbbf24' }}
+          />
+          <button
+            onClick={() => handleSend()}
+            disabled={!text.trim() || sending}
+            className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-110 active:scale-95 disabled:opacity-40"
+            style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)' }}>
+            <ChevronRight size={20} color="#000" />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── MY MATCHES SCREEN ────────────────────────────────────────────────────────
 
-function MyMatchesScreen({ user, myArchetype }) {
+function MyMatchesScreen({ user, myArchetype, myProfile }) {
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [matchProfiles, setMatchProfiles] = useState({})
+  const [activeChatMatch, setActiveChatMatch] = useState(null)
 
   useEffect(() => {
     getMyMatches(user.id).then(async ({ data }) => {
@@ -1794,11 +1974,12 @@ function MyMatchesScreen({ user, myArchetype }) {
               const other = matchProfiles[otherId]
               const otherArch = ALL_ARCHETYPES.find(a => a.id === other?.archetype_id)
               const compat = compatibilityScore(
-                bb.sessionManager.getSession()?.user ? {} : {},
+                myProfile?.category_scores || myArchetype?.category_scores,
                 other?.category_scores
               )
               return (
-                <div key={i} className="rounded-2xl p-4 flex items-center gap-4"
+                <button key={i} onClick={() => setActiveChatMatch({ match, other, otherArch })}
+                  className="w-full rounded-2xl p-4 flex items-center gap-4 text-left transition-all hover:scale-[1.01] active:scale-[0.99]"
                   style={{ background: 'linear-gradient(145deg,#1a1428,#141428)', border: '1px solid rgba(139,92,246,0.2)' }}>
                   <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0"
                     style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)' }}>
@@ -1807,7 +1988,7 @@ function MyMatchesScreen({ user, myArchetype }) {
                   <div className="flex-1 min-w-0">
                     <p className="text-white font-semibold text-sm truncate">{other?.display_name || 'Anonymous'}</p>
                     <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                      {otherArch?.name || 'Explorer'}
+                      {otherArch?.name || 'Explorer'}{compat > 0 ? ` · ${compat}% match` : ''}
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -1819,12 +2000,23 @@ function MyMatchesScreen({ user, myArchetype }) {
                       {match.created_at ? timeAgo(match.created_at) : ''}
                     </span>
                   </div>
-                </div>
+                </button>
               )
             })}
           </div>
         )}
       </div>
+
+      {activeChatMatch && (
+        <ChatScreen
+          match={activeChatMatch.match}
+          otherProfile={activeChatMatch.other}
+          otherArch={activeChatMatch.otherArch}
+          myLikedCards={myProfile?.liked_card_ids?.map(id => CARDS.find(c => c.id === id)).filter(Boolean) || []}
+          user={user}
+          onClose={() => setActiveChatMatch(null)}
+        />
+      )}
     </div>
   )
 }
@@ -1870,11 +2062,30 @@ function WrappedCard({ archetype, liked, innerRef }) {
 
 // ─── PROFILE SCREEN ───────────────────────────────────────────────────────────
 
-function ProfileScreen({ archetype, liked, recommendations, onRestart, user, scores: scoresProp, onSaved, onGoDiscover, streak }) {
+function ProfileScreen({ archetype, liked, recommendations, onRestart, user, scores: scoresProp, onSaved, onGoDiscover, streak, dbProfile, onProfileUpdated }) {
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [displayName, setDisplayName] = useState(dbProfile?.display_name || user?.email?.split('@')[0] || '')
+  const [bio, setBio] = useState(dbProfile?.bio || '')
+  const [savingBio, setSavingBio] = useState(false)
   const scores = scoresProp ?? computeScores(liked)
   const cardRef = useRef(null)
+
+  const handleNameSave = async () => {
+    setEditingName(false)
+    if (!user || !displayName.trim()) return
+    await updateProfile(user.id, { display_name: displayName.trim() })
+    onProfileUpdated?.({ display_name: displayName.trim() })
+  }
+
+  const handleBioSave = async () => {
+    if (!user) return
+    setSavingBio(true)
+    await updateProfile(user.id, { bio: bio.trim() })
+    onProfileUpdated?.({ bio: bio.trim() })
+    setSavingBio(false)
+  }
 
   const shareUrl = getShareUrl(archetype, liked)
 
@@ -1938,11 +2149,79 @@ function ProfileScreen({ archetype, liked, recommendations, onRestart, user, sco
             style={{ fontFamily: 'Fraunces, serif', fontWeight: 900, fontSize: 34, letterSpacing: '-0.03em' }}>
             {archetype.name}
           </h1>
-          <p className="mt-2 leading-relaxed text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>{archetype.description}</p>
+          <p className="mt-2 leading-relaxed text-sm mb-4" style={{ color: 'rgba(255,255,255,0.5)' }}>{archetype.description}</p>
+
+          {user && (
+            <div className="mb-1">
+              {editingName ? (
+                <input
+                  autoFocus
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                  onBlur={handleNameSave}
+                  onKeyDown={e => e.key === 'Enter' && handleNameSave()}
+                  className="text-center text-sm font-semibold text-white outline-none rounded-xl px-3 py-1.5 w-full max-w-xs"
+                  style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)' }}
+                  maxLength={40}
+                />
+              ) : (
+                <button
+                  onClick={() => setEditingName(true)}
+                  className="flex items-center justify-center gap-1.5 mx-auto text-sm font-semibold transition-opacity hover:opacity-70"
+                  style={{ color: 'rgba(255,255,255,0.6)' }}>
+                  {displayName || 'Add your name'} <span style={{ fontSize: 11, opacity: 0.5 }}>✏️</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {user && (
+            <div className="mx-auto" style={{ maxWidth: 280 }}>
+              <textarea
+                value={bio}
+                onChange={e => setBio(e.target.value.slice(0, 140))}
+                onBlur={handleBioSave}
+                placeholder="Add a line about yourself — 3× more matches"
+                rows={2}
+                className="w-full text-center text-xs leading-relaxed outline-none resize-none bg-transparent"
+                style={{ color: 'rgba(255,255,255,0.35)', caretColor: '#fbbf24' }}
+              />
+              {bio.length > 0 && (
+                <p className="text-center text-xs" style={{ color: 'rgba(255,255,255,0.18)' }}>{bio.length}/140</p>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="rounded-3xl p-4 mb-7" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="rounded-3xl p-4 mb-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <RadarChart scores={scores} size={280} />
+        </div>
+
+        {/* Archetype evolution progress bar */}
+        <div className="rounded-2xl px-4 py-3 mb-7" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold" style={{ color: 'rgba(255,255,255,0.45)' }}>Interests explored</span>
+            <span className="text-xs font-semibold" style={{ color: '#fbbf24' }}>{liked.length}/50</span>
+          </div>
+          <div className="rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)', height: 5 }}>
+            <div className="h-full rounded-full"
+              style={{ width: `${Math.min(100, (liked.length / 50) * 100)}%`, background: 'linear-gradient(90deg,#fbbf24,#f59e0b)', transition: 'width 0.8s cubic-bezier(0.16,1,0.3,1)' }} />
+          </div>
+          {liked.length < 25 && (
+            <p className="text-xs mt-1.5" style={{ color: 'rgba(255,255,255,0.25)' }}>
+              🔒 Your archetype deepens at 25 interests
+            </p>
+          )}
+          {liked.length >= 25 && liked.length < 50 && (
+            <p className="text-xs mt-1.5" style={{ color: 'rgba(255,255,255,0.25)' }}>
+              ✨ Your archetype is evolving — keep going
+            </p>
+          )}
+          {liked.length >= 50 && (
+            <p className="text-xs mt-1.5" style={{ color: '#fbbf24' }}>
+              🏆 All 50 interests explored — rare mind
+            </p>
+          )}
         </div>
 
         {liked.length > 0 && (
@@ -2212,6 +2491,8 @@ export default function App() {
               streak={streak}
               onSaved={handleProfileSaved}
               onGoDiscover={() => setTab('discover')}
+              dbProfile={dbProfile}
+              onProfileUpdated={fields => setDbProfile(prev => ({ ...prev, ...fields }))}
             />
           )}
           {tab === 'discover' && user && (
@@ -2223,7 +2504,7 @@ export default function App() {
             />
           )}
           {tab === 'matches' && user && (
-            <MyMatchesScreen user={user} myArchetype={archetype} />
+            <MyMatchesScreen user={user} myArchetype={archetype} myProfile={dbProfile} />
           )}
           {user && (
             <BottomNav tab={tab} onTab={setTab} matchCount={matchCount} />
