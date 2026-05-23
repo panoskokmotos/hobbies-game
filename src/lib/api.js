@@ -2,13 +2,37 @@ import { bb } from './butterbase.js'
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 
-export const signUp = ({ name, email, password }) =>
-  bb.auth.signUp({ email, password })
+export const signUp = async ({ name, email, password }) => {
+  try {
+    const result = await bb.auth.signUp({ email, password })
+    return result
+  } catch (err) {
+    return { data: null, error: { message: err.message || 'Sign up failed' } }
+  }
+}
 
-export const signIn = ({ email, password }) =>
-  bb.auth.signIn({ email, password })
+export const signIn = async ({ email, password }) => {
+  try {
+    const result = await bb.auth.signIn({ email, password })
+    return result
+  } catch (err) {
+    return { data: null, error: { message: err.message || 'Sign in failed' } }
+  }
+}
 
-export const signOut = () => bb.auth.signOut()
+export const signInWithGoogle = () =>
+  bb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
+
+export const signInWithApple = () =>
+  bb.auth.signInWithOAuth({ provider: 'apple', options: { redirectTo: window.location.origin } })
+
+export const signOut = async () => {
+  try {
+    return await bb.auth.signOut()
+  } catch (err) {
+    return { error: { message: err.message } }
+  }
+}
 
 export const getSession = () => bb.sessionManager.getSession()
 
@@ -29,6 +53,9 @@ export const saveProfile = (userId, { archetype, liked, scores, recommendations,
 
 export const getMyProfile = (userId) =>
   bb.from('profiles').select('*').eq('user_id', userId).limit(1)
+
+export const updateProfile = (userId, fields) =>
+  bb.from('profiles').update(fields).eq('user_id', userId)
 
 export const getDiscoveryProfiles = async (myUserId, limit = 30) => {
   // Get IDs I've already swiped on so we can exclude them
@@ -76,6 +103,23 @@ export const getMyMatches = async (userId) => {
   const all = [...(asA || []), ...(asB || [])]
   all.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
   return { data: all, error: null }
+}
+
+// ─── MESSAGES ─────────────────────────────────────────────────────────────────
+
+export const getMessages = (matchId) =>
+  bb.from('messages').select('*').eq('match_id', matchId).order('created_at', { ascending: true })
+
+export const sendMessage = (matchId, senderId, content) =>
+  bb.from('messages').insert({ match_id: matchId, sender_id: senderId, content })
+
+// ─── ADMIRERS ─────────────────────────────────────────────────────────────────
+
+export const getAdmirers = async (myUserId) => {
+  const { data: mySwipes } = await bb.from('swipes').select('swiped_id').eq('swiper_id', myUserId)
+  const seen = new Set((mySwipes || []).map(s => s.swiped_id))
+  const { data } = await bb.from('swipes').select('swiper_id').eq('swiped_id', myUserId).eq('direction', 'like')
+  return (data || []).filter(s => !seen.has(s.swiper_id)).map(s => s.swiper_id)
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────

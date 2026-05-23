@@ -2,25 +2,31 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Heart, X, ChevronRight, Download, Copy, Check, RefreshCw, Share2, Zap, User, Compass, MessageCircle, LogOut, Eye, EyeOff } from 'lucide-react'
 import { bb } from './lib/butterbase.js'
 import {
-  signUp, signIn, signOut, getSession, onAuthStateChange,
-  saveProfile, getMyProfile, getDiscoveryProfiles,
+  signUp, signIn, signOut, signInWithGoogle, signInWithApple,
+  getSession, onAuthStateChange,
+  saveProfile, getMyProfile, updateProfile, getDiscoveryProfiles,
   recordSwipe, checkMutualLike, createMatch, getMyMatches,
+  getMessages, sendMessage, getAdmirers,
   compatibilityScore,
 } from './lib/api.js'
+
+const QUICK_LIMIT = 5
 
 // ─── CARD DATA (50 cards) ─────────────────────────────────────────────────────
 
 const CARDS = [
-  { id: 1,  emoji: '🏃', label: 'Running',          category: 'physical'    },
-  { id: 2,  emoji: '🎸', label: 'Guitar',            category: 'music'       },
+  // First 5 cover 5 distinct categories → best archetype detection from quick swipe
   { id: 3,  emoji: '🧠', label: 'Philosophy',        category: 'mind'        },
+  { id: 8,  emoji: '✍️', label: 'Writing',           category: 'creative'    },
+  { id: 1,  emoji: '🏃', label: 'Running',           category: 'physical'    },
+  { id: 10, emoji: '🎉', label: 'Hosting',           category: 'social'      },
   { id: 4,  emoji: '✈️', label: 'Solo Travel',       category: 'exploration' },
+  // Remaining 45 cards
+  { id: 2,  emoji: '🎸', label: 'Guitar',            category: 'music'       },
   { id: 5,  emoji: '🍳', label: 'Cooking',           category: 'culinary'    },
   { id: 6,  emoji: '🧘', label: 'Meditation',        category: 'spiritual'   },
   { id: 7,  emoji: '🧗', label: 'Climbing',          category: 'physical'    },
-  { id: 8,  emoji: '✍️', label: 'Writing',           category: 'creative'    },
   { id: 9,  emoji: '🍷', label: 'Wine & Food',       category: 'culinary'    },
-  { id: 10, emoji: '🎉', label: 'Hosting',           category: 'social'      },
   { id: 11, emoji: '🔭', label: 'Astronomy',         category: 'mind'        },
   { id: 12, emoji: '🎬', label: 'Filmmaking',        category: 'creative'    },
   { id: 13, emoji: '🏄', label: 'Surfing',           category: 'physical'    },
@@ -46,7 +52,6 @@ const CARDS = [
   { id: 33, emoji: '⭐', label: 'Astrology',         category: 'spiritual'   },
   { id: 34, emoji: '🎭', label: 'Improv Theatre',    category: 'social'      },
   { id: 35, emoji: '🌳', label: 'Genealogy',         category: 'mind'        },
-  // — new cards —
   { id: 36, emoji: '🎛️', label: 'DJing',             category: 'music'       },
   { id: 37, emoji: '🥁', label: 'Drumming',          category: 'music'       },
   { id: 38, emoji: '🎼', label: 'Singing',           category: 'music'       },
@@ -272,6 +277,15 @@ function getShareUrl(archetype, liked) {
   return `${window.location.origin}${window.location.pathname}?p=${payload}`
 }
 
+function timeAgo(ts) {
+  const ms = Date.now() - new Date(ts).getTime()
+  const h = Math.floor(ms / 3600000)
+  const d = Math.floor(h / 24)
+  if (d > 0) return `${d}d ago`
+  if (h > 0) return `${h}h ago`
+  return 'just now'
+}
+
 function saveState(archetype, liked, recommendations) {
   try {
     localStorage.setItem('polymath_v1', JSON.stringify({
@@ -291,6 +305,43 @@ function loadState() {
     const archetype = ALL_ARCHETYPES.find(a => a.id === archetypeId) ?? DEFAULT_ARCHETYPE
     return { archetype, liked, recommendations: recs }
   } catch { return null }
+}
+
+function alienReaction(liked) {
+  if (!liked || liked.length === 0) return "I see potential. Show me what you love."
+  const scores = computeScores(liked)
+  const diverse = Object.values(scores).filter(v => v > 0).length
+  if (diverse >= 3) return "You contain multitudes. I had to stop you."
+  const top = Object.entries(scores).sort((a, b) => b[1] - a[1])[0]?.[0]
+  if (top === 'mind') return "A thinker. Rarer than you know."
+  if (top === 'physical') return "You live in your body. I respect that."
+  if (top === 'creative') return "You make things. That changes everything."
+  if (top === 'music') return "You hear the world differently. Literally."
+  if (top === 'exploration') return "You move. You seek. You find."
+  if (top === 'social') return "People come alive around you. Don't waste that."
+  if (top === 'craft') return "You build things with your hands. That's rare and beautiful."
+  if (top === 'spiritual') return "You're looking inward. Most people never dare."
+  if (top === 'tech') return "You build the future. You know it, too."
+  if (top === 'culinary') return "You understand pleasure. That's a form of wisdom."
+  return "I've seen enough. You're one of them."
+}
+
+function loadStreak() {
+  try {
+    const raw = localStorage.getItem('polymath_streak')
+    return raw ? JSON.parse(raw) : { count: 0, lastDate: null }
+  } catch { return { count: 0, lastDate: null } }
+}
+
+function updateStreak() {
+  const today = new Date().toDateString()
+  const s = loadStreak()
+  if (s.lastDate === today) return s
+  const gracePrev = new Date(Date.now() - 26 * 3600 * 1000).toDateString()
+  const count = s.lastDate === gracePrev ? s.count + 1 : 1
+  const next = { count, lastDate: today }
+  try { localStorage.setItem('polymath_streak', JSON.stringify(next)) } catch {}
+  return next
 }
 
 // ─── SOUND ────────────────────────────────────────────────────────────────────
@@ -453,18 +504,20 @@ function ReturningUserScreen({ saved, onContinue, onRestart }) {
 
 // ─── SWIPE SCREEN ─────────────────────────────────────────────────────────────
 
-function SwipeScreen({ onComplete }) {
-  const [index, setIndex] = useState(0)
-  const [liked, setLiked] = useState([])
+function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initialLiked = [] }) {
+  const [index, setIndex] = useState(startIndex)
+  const [liked, setLiked] = useState(initialLiked)
   const [exiting, setExiting] = useState(null)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
 
-  const indexRef = useRef(0)
-  const likedRef = useRef([])
+  const indexRef = useRef(startIndex)
+  const likedRef = useRef(initialLiked)
   const isDeciding = useRef(false)
   const dragStart = useRef(null)
   const playSwipe = useSwipeSound()
+  const consecutiveRight = useRef(0)
+  const [streakMsg, setStreakMsg] = useState(null)
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -478,6 +531,7 @@ function SwipeScreen({ onComplete }) {
     if (isDeciding.current) return
     isDeciding.current = true
     playSwipe(direction)
+    if (navigator.vibrate) navigator.vibrate(direction === 'right' ? [30] : [10, 10])
     setExiting(direction)
     setDragging(false)
 
@@ -497,7 +551,24 @@ function SwipeScreen({ onComplete }) {
       isDeciding.current = false
       dragStart.current = null
 
-      if (newIndex >= CARDS.length) onComplete(newLiked)
+      if (direction === 'right') {
+        consecutiveRight.current += 1
+        const n = consecutiveRight.current
+        const totalLikes = newLiked.length
+        let msg = null
+        if (n === 3) msg = "You're drawn to this. I see it. ✨"
+        else if (n === 5) msg = "A collector. I love that. 🔥"
+        else if (totalLikes === 10) msg = "10 passions and counting 💫"
+        if (msg) {
+          setStreakMsg(msg)
+          setTimeout(() => setStreakMsg(null), 2200)
+        }
+      } else {
+        consecutiveRight.current = 0
+      }
+
+      if (onQuickComplete && newIndex >= QUICK_LIMIT + startIndex) onQuickComplete(newLiked)
+      else if (newIndex >= CARDS.length) onComplete(newLiked)
     }, 380)
   }, [onComplete, playSwipe])
 
@@ -558,11 +629,11 @@ function SwipeScreen({ onComplete }) {
           <span className="text-white font-bold text-xl" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
             polymath
           </span>
-          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{index}/{CARDS.length}</span>
+          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{index - startIndex}/{onQuickComplete ? QUICK_LIMIT : CARDS.length}</span>
         </div>
         <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
           <div className="h-full rounded-full transition-all duration-300"
-            style={{ width: `${(index / CARDS.length) * 100}%`, background: 'linear-gradient(90deg,#f59e0b,#fbbf24)' }} />
+            style={{ width: `${((index - startIndex) / (onQuickComplete ? QUICK_LIMIT : CARDS.length)) * 100}%`, background: 'linear-gradient(90deg,#f59e0b,#fbbf24)' }} />
         </div>
         {liked.length > 0 && (
           <p className="text-xs mt-1.5 text-right" style={{ color: 'rgba(251,191,36,0.7)' }}>
@@ -616,7 +687,14 @@ function SwipeScreen({ onComplete }) {
         </div>
       </div>
 
-      <div className="flex gap-10 mt-10">
+      {streakMsg && (
+        <div className="mt-6 px-5 py-2.5 rounded-2xl text-sm font-semibold text-center animate-bounce-in"
+          style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)', maxWidth: 280 }}>
+          {streakMsg}
+        </div>
+      )}
+
+      <div className="flex gap-10 mt-6">
         <button onClick={() => decide('left')}
           className="w-16 h-16 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
           style={{ background: 'rgba(96,165,250,0.12)', border: '1.5px solid rgba(96,165,250,0.35)' }}>
@@ -627,6 +705,213 @@ function SwipeScreen({ onComplete }) {
           style={{ background: 'rgba(251,191,36,0.12)', border: '1.5px solid rgba(251,191,36,0.35)' }}>
           <Heart size={26} color="#fbbf24" />
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── ALIEN PROPOSAL SCREEN ───────────────────────────────────────────────────
+
+function AlienProposalScreen({ liked, archetype, scores, recommendations, onSignedUp, onSkip }) {
+  const [phase, setPhase] = useState(0)
+  const [authMode, setAuthMode] = useState(null) // null | 'email'
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPw, setShowPw] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [socialLoading, setSocialLoading] = useState(null) // 'google' | 'apple'
+  const [error, setError] = useState(null)
+  const [emailConfirm, setEmailConfirm] = useState(false)
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setPhase(1), 120)
+    const t2 = setTimeout(() => setPhase(2), 700)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [])
+
+  const handleSocialAuth = async (provider) => {
+    setSocialLoading(provider)
+    setError(null)
+    try {
+      localStorage.setItem('polymath_quick', JSON.stringify({ likedIds: liked.map(c => c.id) }))
+      if (provider === 'google') await signInWithGoogle()
+      else await signInWithApple()
+    } catch (err) {
+      setError('Could not open sign-in. Try email instead.')
+      localStorage.removeItem('polymath_quick')
+    }
+    setSocialLoading(null)
+  }
+
+  const handleEmailSignUp = async e => {
+    e.preventDefault()
+    setLoading(true); setError(null)
+    try {
+      const { data, error: authErr } = await signUp({ name, email, password })
+      if (authErr) { setError(authErr.message || 'Sign up failed'); setLoading(false); return }
+      const userId = data?.user?.id
+      if (userId) {
+        await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name })
+        onSignedUp(data.user)
+      } else {
+        setEmailConfirm(true)
+      }
+    } catch (err) {
+      setError(err.message || 'Something went wrong')
+    }
+    setLoading(false)
+  }
+
+  if (emailConfirm) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: '#0a0a0f' }}>
+        <div className="w-full max-w-xs text-center">
+          <div className="text-6xl mb-4">📬</div>
+          <h2 className="text-white text-2xl font-bold mb-3" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>
+            Check your inbox
+          </h2>
+          <p className="text-sm leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.45)' }}>
+            We sent a confirmation link to <span style={{ color: '#fbbf24' }}>{email}</span>. Click it and come back to explore.
+          </p>
+          <button onClick={onSkip}
+            className="text-xs transition-opacity hover:opacity-70"
+            style={{ color: 'rgba(255,255,255,0.3)' }}>
+            Continue without account →
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-10 relative overflow-hidden"
+      style={{ background: '#0a0a0f' }}>
+      <div className="absolute inset-0 pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse 70% 50% at 50% 25%, rgba(139,92,246,0.12) 0%, transparent 70%)' }} />
+
+      <div className="w-full max-w-xs relative z-10">
+        {/* Alien + headline */}
+        <div className="text-center mb-6"
+          style={{ opacity: phase >= 1 ? 1 : 0, transform: phase >= 1 ? 'translateY(0)' : 'translateY(20px)', transition: 'opacity 0.6s ease, transform 0.6s cubic-bezier(0.16,1,0.3,1)' }}>
+          <div className="text-7xl mb-2 animate-float" style={{ display: 'inline-block' }}>👽</div>
+          <div className="text-3xl -mt-2 mb-4">💍</div>
+          <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#8b5cf6' }}>
+            The alien has spoken
+          </p>
+          <h1 className="text-white text-3xl font-bold leading-tight mb-2"
+            style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>
+            {alienReaction(liked)}
+          </h1>
+          <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            Will you join Polymath? Your archetype awaits — and so do your people.
+          </p>
+        </div>
+
+        {/* Liked cards pills */}
+        {liked.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-1.5 mb-6"
+            style={{ opacity: phase >= 2 ? 1 : 0, transform: phase >= 2 ? 'scale(1)' : 'scale(0.95)', transition: 'opacity 0.5s 0.1s ease, transform 0.5s 0.1s ease' }}>
+            {liked.map(c => (
+              <span key={c.id} className="px-3 py-1.5 rounded-full text-xs font-medium"
+                style={{ background: `${CATEGORY_COLORS[c.category]}15`, color: CATEGORY_COLORS[c.category], border: `1px solid ${CATEGORY_COLORS[c.category]}30` }}>
+                {c.emoji} {c.label}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Auth section */}
+        <div style={{ opacity: phase >= 2 ? 1 : 0, transform: phase >= 2 ? 'translateY(0)' : 'translateY(12px)', transition: 'opacity 0.5s 0.2s ease, transform 0.5s 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
+          {error && (
+            <div className="rounded-xl px-4 py-2.5 mb-3 text-sm" style={{ background: 'rgba(239,68,68,0.12)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.2)' }}>
+              {error}
+            </div>
+          )}
+
+          {authMode !== 'email' && (
+            <>
+              {/* Google button */}
+              <button
+                onClick={() => handleSocialAuth('google')}
+                disabled={!!socialLoading}
+                className="w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-3 mb-3 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                style={{ background: 'white', color: '#1f1f1f', opacity: socialLoading ? 0.7 : 1 }}>
+                {socialLoading === 'google' ? (
+                  <div className="w-4 h-4 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" />
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 18 18">
+                    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+                    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+                    <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+                    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+                  </svg>
+                )}
+                {socialLoading === 'google' ? 'Opening Google…' : 'Continue with Google'}
+              </button>
+
+              {/* Apple button */}
+              <button
+                onClick={() => handleSocialAuth('apple')}
+                disabled={!!socialLoading}
+                className="w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-3 mb-4 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                style={{ background: '#1a1a1a', color: 'white', border: '1px solid rgba(255,255,255,0.15)', opacity: socialLoading ? 0.7 : 1 }}>
+                {socialLoading === 'apple' ? (
+                  <div className="w-4 h-4 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" />
+                ) : (
+                  <svg width="17" height="17" viewBox="0 0 17 17" fill="white">
+                    <path d="M14.04 8.862c-.02-2.175 1.784-3.228 1.864-3.28-1.019-1.487-2.598-1.69-3.154-1.708-1.33-.136-2.61.788-3.286.788-.676 0-1.7-.773-2.8-.751-1.428.021-2.758.839-3.492 2.118C1.675 8.55 2.76 13.1 4.303 15.168c.768 1.102 1.682 2.333 2.876 2.29 1.16-.048 1.596-.742 2.997-.742 1.4 0 1.797.742 3.012.717 1.248-.02 2.033-1.111 2.787-2.22.893-1.272 1.253-2.515 1.268-2.578-.027-.012-2.42-.924-2.443-3.673zM11.773 2.54C12.377 1.81 12.78.82 12.664-.2c-.857.037-1.91.574-2.53 1.286-.549.633-1.035 1.655-.905 2.631.957.073 1.938-.484 2.544-1.177z"/>
+                  </svg>
+                )}
+                {socialLoading === 'apple' ? 'Opening Apple…' : 'Continue with Apple'}
+              </button>
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>or</span>
+                <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
+              </div>
+
+              <button onClick={() => setAuthMode('email')}
+                className="w-full py-3 rounded-xl text-sm font-medium mb-5 transition-all hover:opacity-80"
+                style={{ background: 'rgba(139,92,246,0.12)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.25)' }}>
+                Continue with Email
+              </button>
+            </>
+          )}
+
+          {authMode === 'email' && (
+            <form onSubmit={handleEmailSignUp} className="space-y-2.5 mb-5">
+              <button type="button" onClick={() => setAuthMode(null)} className="text-xs mb-1 transition-opacity hover:opacity-70"
+                style={{ color: 'rgba(255,255,255,0.3)' }}>← back</button>
+              <input type="text" placeholder="Your name" value={name} onChange={e => setName(e.target.value)} required
+                className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+              <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required
+                className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+              <div className="relative">
+                <input type={showPw ? 'text' : 'password'} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required
+                  className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none pr-10"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+                <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              <button type="submit" disabled={loading}
+                className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
+                style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', opacity: loading ? 0.7 : 1 }}>
+                {loading ? 'Creating account…' : 'Join Polymath →'}
+              </button>
+            </form>
+          )}
+
+          <button onClick={onSkip}
+            className="w-full text-xs transition-opacity hover:opacity-70 text-center"
+            style={{ color: 'rgba(255,255,255,0.25)' }}>
+            Skip for now — explore first →
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -666,6 +951,9 @@ function ArchetypeScreen({ archetype, liked, onNext }) {
           style={{ fontFamily: 'Fraunces, serif', fontWeight: 800, fontSize: 36, letterSpacing: '-0.03em' }}>
           {archetype.name}
         </h1>
+        <p className="text-center text-xs mb-4 font-medium" style={{ color: 'rgba(255,255,255,0.3)' }}>
+          {Math.round(21000 * archetype.rarity / 100)} Polymaths worldwide share this archetype
+        </p>
         <p className="text-center text-lg leading-relaxed mb-2" style={{ color: 'rgba(255,255,255,0.75)' }}>{archetype.description}</p>
         <p className="text-center text-base leading-relaxed mb-10" style={{ color: 'rgba(255,255,255,0.4)' }}>{archetype.description2}</p>
 
@@ -701,8 +989,7 @@ function RecommendationsScreen({ liked, onNext }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [phase, setPhase] = useState(0)
-  const [apiKey, setApiKey] = useState(import.meta.env.VITE_ANTHROPIC_API_KEY || '')
-  const [showKeyInput, setShowKeyInput] = useState(false)
+  const [apiKey] = useState(import.meta.env.VITE_ANTHROPIC_API_KEY || '')
   const [usingFallback, setUsingFallback] = useState(false)
   const hasFetched = useRef(false)
 
@@ -750,28 +1037,8 @@ function RecommendationsScreen({ liked, onNext }) {
             Your Expansion Map
           </h1>
           <p className="text-sm" style={{ color: 'rgba(255,255,255,0.35)' }}>
-            {usingFallback ? 'Demo recommendations' : 'AI-curated for your profile'}
+            {usingFallback ? 'Curated for your interests' : 'AI-curated for your profile'}
           </p>
-          {usingFallback && !loading && (
-            <div className="mt-3">
-              {showKeyInput ? (
-                <form onSubmit={e => { e.preventDefault(); setShowKeyInput(false); hasFetched.current = false; fetchRecs(apiKey) }} className="flex gap-2">
-                  <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-                    placeholder="sk-ant-…" autoFocus
-                    className="flex-1 px-3 py-2 rounded-xl text-sm text-white outline-none"
-                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)' }} />
-                  <button type="submit" className="px-4 py-2 rounded-xl text-sm font-semibold"
-                    style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>Go</button>
-                </form>
-              ) : (
-                <button onClick={() => setShowKeyInput(true)}
-                  className="text-xs px-3 py-1.5 rounded-full"
-                  style={{ color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.08)' }}>
-                  + Add API key for real AI
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
         {loading ? (
@@ -883,17 +1150,24 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [saved, setSaved] = useState(false)
+  const [socialLoading, setSocialLoading] = useState(null)
 
   const handleSignUp = async e => {
     e.preventDefault()
     setLoading(true); setError(null)
-    const { data, error: authErr } = await signUp({ name, email, password })
-    if (authErr) { setError(authErr.message); setLoading(false); return }
-    const userId = data?.user?.id
-    if (userId) {
-      await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name })
-      setSaved(true)
-      onSaved?.(data.user)
+    try {
+      const { data, error: authErr } = await signUp({ name, email, password })
+      if (authErr) { setError(authErr.message || 'Sign up failed'); setLoading(false); return }
+      const userId = data?.user?.id
+      if (userId) {
+        await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name })
+        setSaved(true)
+        onSaved?.(data.user)
+      } else {
+        setError('Check your email to confirm your account, then sign in.')
+      }
+    } catch (err) {
+      setError(err.message || 'Sign up failed')
     }
     setLoading(false)
   }
@@ -901,18 +1175,37 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
   const handleSignIn = async e => {
     e.preventDefault()
     setLoading(true); setError(null)
-    const { data, error: authErr } = await signIn({ email, password })
-    if (authErr) { setError(authErr.message); setLoading(false); return }
-    const userId = data?.user?.id
-    if (userId) {
-      const { data: existing } = await getMyProfile(userId)
-      if (!existing?.[0]) {
-        await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name || email.split('@')[0] })
+    try {
+      const { data, error: authErr } = await signIn({ email, password })
+      if (authErr) { setError(authErr.message || 'Sign in failed'); setLoading(false); return }
+      const userId = data?.user?.id
+      if (userId) {
+        const { data: existing } = await getMyProfile(userId)
+        if (!existing?.[0]) {
+          await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name || email.split('@')[0] })
+        }
+        setSaved(true)
+        onSaved?.(data.user)
+      } else {
+        setError('Sign in failed — please check your credentials.')
       }
-      setSaved(true)
-      onSaved?.(data.user)
+    } catch (err) {
+      setError(err.message || 'Sign in failed')
     }
     setLoading(false)
+  }
+
+  const handleSocialAuth = async (provider) => {
+    setSocialLoading(provider); setError(null)
+    try {
+      localStorage.setItem('polymath_quick', JSON.stringify({ likedIds: liked.map(c => c.id) }))
+      if (provider === 'google') await signInWithGoogle()
+      else await signInWithApple()
+    } catch (err) {
+      setError('Could not open sign-in. Try email instead.')
+      localStorage.removeItem('polymath_quick')
+    }
+    setSocialLoading(null)
   }
 
   // Already logged in
@@ -959,17 +1252,52 @@ function MatchingCTASection({ user, archetype, liked, scores, recommendations, o
         <h3 className="text-white font-bold text-xl mb-1" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
           Meet real people
         </h3>
-        <p className="text-sm mb-5 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+        <p className="text-sm mb-4 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
           Swipe on real profiles matched to your archetype. Find your intellectual soulmates.
         </p>
+
+        {error && (
+          <div className="rounded-xl px-4 py-2.5 mb-3 text-sm" style={{ background: 'rgba(239,68,68,0.12)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.2)' }}>
+            {error}
+          </div>
+        )}
+
+        <button
+          onClick={() => handleSocialAuth('google')}
+          disabled={!!socialLoading}
+          className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-3 mb-2 transition-all hover:scale-[1.02]"
+          style={{ background: 'white', color: '#1f1f1f', opacity: socialLoading ? 0.7 : 1 }}>
+          {socialLoading === 'google' ? <div className="w-4 h-4 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" /> : (
+            <svg width="16" height="16" viewBox="0 0 18 18"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+          )}
+          {socialLoading === 'google' ? 'Opening Google…' : 'Continue with Google'}
+        </button>
+
+        <button
+          onClick={() => handleSocialAuth('apple')}
+          disabled={!!socialLoading}
+          className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-3 mb-3 transition-all hover:scale-[1.02]"
+          style={{ background: '#1a1a1a', color: 'white', border: '1px solid rgba(255,255,255,0.12)', opacity: socialLoading ? 0.7 : 1 }}>
+          {socialLoading === 'apple' ? <div className="w-4 h-4 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" /> : (
+            <svg width="15" height="15" viewBox="0 0 17 17" fill="white"><path d="M14.04 8.862c-.02-2.175 1.784-3.228 1.864-3.28-1.019-1.487-2.598-1.69-3.154-1.708-1.33-.136-2.61.788-3.286.788-.676 0-1.7-.773-2.8-.751-1.428.021-2.758.839-3.492 2.118C1.675 8.55 2.76 13.1 4.303 15.168c.768 1.102 1.682 2.333 2.876 2.29 1.16-.048 1.596-.742 2.997-.742 1.4 0 1.797.742 3.012.717 1.248-.02 2.033-1.111 2.787-2.22.893-1.272 1.253-2.515 1.268-2.578-.027-.012-2.42-.924-2.443-3.673zM11.773 2.54C12.377 1.81 12.78.82 12.664-.2c-.857.037-1.91.574-2.53 1.286-.549.633-1.035 1.655-.905 2.631.957.073 1.938-.484 2.544-1.177z"/></svg>
+          )}
+          {socialLoading === 'apple' ? 'Opening Apple…' : 'Continue with Apple'}
+        </button>
+
+        <div className="flex items-center gap-3 mb-3">
+          <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.07)' }} />
+          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>or</span>
+          <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.07)' }} />
+        </div>
+
         <button onClick={() => setMode('signup')}
-          className="w-full py-3.5 rounded-xl font-bold text-sm mb-2 transition-all hover:scale-[1.02]"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white' }}>
-          Create Free Account →
+          className="w-full py-3 rounded-xl font-semibold text-sm mb-2 transition-all hover:scale-[1.02]"
+          style={{ background: 'rgba(139,92,246,0.12)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.25)' }}>
+          Continue with Email →
         </button>
         <button onClick={() => setMode('signin')}
-          className="w-full py-2.5 rounded-xl text-sm transition-opacity hover:opacity-70"
-          style={{ color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          className="w-full py-2 rounded-xl text-xs transition-opacity hover:opacity-70"
+          style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.08)' }}>
           Already have an account? Sign in
         </button>
       </div>
@@ -1058,9 +1386,14 @@ function BottomNav({ tab, onTab, matchCount = 0 }) {
 
 // ─── MATCH MODAL ──────────────────────────────────────────────────────────────
 
-function MatchModal({ myArchetype, theirProfile, onClose, onDiscover }) {
+function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, onDiscover }) {
   const [phase, setPhase] = useState(0)
+  const [waved, setWaved] = useState(false)
   useEffect(() => { setTimeout(() => setPhase(1), 100) }, [])
+
+  const theirLikedIds = new Set(theirProfile?.liked_card_ids || [])
+  const myIds = new Set((myLikedCards || []).map(c => c.id))
+  const sharedCards = (myLikedCards || []).filter(c => theirLikedIds.has(c.id)).slice(0, 3)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-6"
@@ -1074,10 +1407,26 @@ function MatchModal({ myArchetype, theirProfile, onClose, onDiscover }) {
         <h1 className="text-white text-3xl font-bold mb-3 leading-tight" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>
           You and {theirProfile?.display_name || 'someone'} clicked
         </h1>
-        <p className="text-sm mb-8 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
-          Two {myArchetype?.name} vibes found each other. Start a conversation.
-        </p>
-        <div className="flex justify-center gap-6 mb-8">
+
+        {sharedCards.length > 0 ? (
+          <div className="mb-6">
+            <p className="text-xs mb-2 font-medium" style={{ color: 'rgba(251,191,36,0.6)' }}>You both love</p>
+            <div className="flex gap-1.5 flex-wrap justify-center">
+              {sharedCards.map((c, i) => (
+                <span key={i} className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                  style={{ background: 'rgba(251,191,36,0.14)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.38)' }}>
+                  {c.emoji} {c.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm mb-6 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+            Two curious minds found each other. Start a conversation.
+          </p>
+        )}
+
+        <div className="flex justify-center gap-6 mb-6">
           <div className="flex flex-col items-center gap-2">
             <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl"
               style={{ background: 'rgba(251,191,36,0.12)', border: '2px solid rgba(251,191,36,0.3)' }}>
@@ -1094,8 +1443,15 @@ function MatchModal({ myArchetype, theirProfile, onClose, onDiscover }) {
             <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>{theirProfile?.display_name || 'Them'}</span>
           </div>
         </div>
+
+        <button
+          onClick={() => setWaved(true)}
+          className="w-full py-3.5 rounded-2xl font-bold mb-3 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          style={{ background: waved ? 'rgba(251,191,36,0.12)' : 'rgba(251,191,36,0.15)', color: waved ? '#fbbf24' : '#fbbf24', border: '1px solid rgba(251,191,36,0.35)' }}>
+          {waved ? '👋 Wave sent!' : 'Send a Wave 👋'}
+        </button>
         <button onClick={onDiscover}
-          className="w-full py-4 rounded-2xl text-white font-bold mb-3 transition-all hover:scale-[1.02]"
+          className="w-full py-3.5 rounded-2xl text-white font-bold mb-3 transition-all hover:scale-[1.02]"
           style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', boxShadow: '0 0 40px rgba(139,92,246,0.3)' }}>
           See My Matches
         </button>
@@ -1118,6 +1474,7 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
   const [exiting, setExiting] = useState(null)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
+  const [admirer, setAdmirer] = useState(null) // { userId, profile? }
 
   const isDeciding = useRef(false)
   const indexRef = useRef(0)
@@ -1125,8 +1482,19 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
   const playSwipe = useSwipeSound()
 
   useEffect(() => {
-    getDiscoveryProfiles(user.id).then(({ data }) => {
-      setProfiles(data || [])
+    Promise.all([
+      getDiscoveryProfiles(user.id),
+      getAdmirers(user.id),
+    ]).then(async ([{ data: profileData }, admireIds]) => {
+      const regular = profileData || []
+      setProfiles(regular)
+      // Find one admirer not already in the deck
+      const deckIds = new Set(regular.map(p => p.user_id))
+      const freshAdmirerId = admireIds.find(id => !deckIds.has(id))
+      if (freshAdmirerId) {
+        const { data: ap } = await bb.from('profiles').select('*').eq('user_id', freshAdmirerId).limit(1)
+        setAdmirer({ userId: freshAdmirerId, profile: ap?.[0] || null })
+      }
       setLoading(false)
     })
   }, [user.id])
@@ -1147,8 +1515,11 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
         if (mutual) {
           await createMatch(user.id, profile.user_id)
           onMatch?.(profile)
+          if (admirer?.userId === profile.user_id) setAdmirer(null)
         }
       }
+      // Swiped past the admirer without a match — clear teaser
+      if (admirer?.userId === profile.user_id) setAdmirer(null)
 
       indexRef.current += 1
       setIndex(i => i + 1)
@@ -1197,15 +1568,74 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
   }
 
   if (profiles.length === 0 || index >= profiles.length) {
+    const isEmpty = profiles.length === 0
+    const inviteText = `I just found out I'm The ${user?.email?.split('@')[0] || 'Explorer'} on Polymath — what are you? 60-second test → ${window.location.origin}`
+    const handleInvite = () => {
+      if (navigator.share) {
+        navigator.share({ title: 'Join me on Polymath', text: inviteText, url: window.location.origin }).catch(() => {})
+      } else {
+        navigator.clipboard.writeText(window.location.origin).catch(() => {})
+      }
+    }
+
+    // Daily discovery card — date-seeded from un-liked cards
+    const myLikedIdsEmpty = new Set(myProfile?.liked_card_ids || [])
+    const unlikedCards = CARDS.filter(c => !myLikedIdsEmpty.has(c.id))
+    const todayKey = new Date().toDateString()
+    const seedNum = [...todayKey].reduce((acc, c) => acc + c.charCodeAt(0), 0)
+    const todayCard = unlikedCards.length > 0 ? unlikedCards[seedNum % unlikedCards.length] : null
+    const dailyDoneKey = `polymath_daily_${todayKey}`
+    const [dailyAdded, setDailyAdded] = useState(() => !!localStorage.getItem(dailyDoneKey))
+
+    const handleAddDailyCard = async () => {
+      if (!todayCard || dailyAdded) return
+      const newIds = [...(myProfile?.liked_card_ids || []), todayCard.id]
+      await updateProfile(user.id, { liked_card_ids: newIds })
+      localStorage.setItem(dailyDoneKey, '1')
+      setDailyAdded(true)
+    }
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={{ background: '#0a0a0f', paddingBottom: 80 }}>
         <div className="text-5xl mb-4">🌌</div>
-        <h2 className="text-white text-2xl font-bold mb-2" style={{ fontFamily: 'Fraunces, serif' }}>
-          {profiles.length === 0 ? "You're the first one here" : "You've seen everyone"}
+        <h2 className="text-white text-2xl font-bold mb-3" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
+          {isEmpty ? "You're one of the first here." : "You've seen everyone."}
         </h2>
-        <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          Share Polymath with people you know — the more who join, the better your matches.
+        <p className="text-sm leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.4)', maxWidth: 260 }}>
+          {isEmpty
+            ? "The people who join now will define this community."
+            : "Invite friends — new matches appear when they join."}
         </p>
+        <button
+          onClick={handleInvite}
+          className="px-6 py-3 rounded-2xl font-bold text-sm mb-8 transition-all hover:scale-[1.03] active:scale-[0.97]"
+          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', boxShadow: '0 0 30px rgba(139,92,246,0.3)' }}>
+          {isEmpty ? '✨ Invite friends & unlock matches' : '🔗 Invite more people'}
+        </button>
+
+        {todayCard && (
+          <div className="w-full max-w-xs">
+            <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: 'rgba(255,255,255,0.25)' }}>Today's discovery</p>
+            <div className="rounded-2xl p-5 text-center mb-3"
+              style={{ background: `${CATEGORY_COLORS[todayCard.category]}0d`, border: `1px solid ${CATEGORY_COLORS[todayCard.category]}30` }}>
+              <div className="text-4xl mb-2">{todayCard.emoji}</div>
+              <p className="text-white font-bold text-lg mb-1" style={{ fontFamily: 'Fraunces, serif' }}>{todayCard.label}</p>
+              <p className="text-xs mb-3" style={{ color: CATEGORY_COLORS[todayCard.category] }}>{CATEGORY_LABELS[todayCard.category]}</p>
+              <button
+                onClick={handleAddDailyCard}
+                disabled={dailyAdded}
+                className="w-full py-2.5 rounded-xl text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{
+                  background: dailyAdded ? 'rgba(16,185,129,0.12)' : `${CATEGORY_COLORS[todayCard.category]}20`,
+                  color: dailyAdded ? '#10b981' : CATEGORY_COLORS[todayCard.category],
+                  border: `1px solid ${dailyAdded ? 'rgba(16,185,129,0.35)' : `${CATEGORY_COLORS[todayCard.category]}40`}`,
+                }}>
+                {dailyAdded ? '✓ Added to your profile' : '+ Add to my profile'}
+              </button>
+            </div>
+            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>Come back tomorrow for a new one.</p>
+          </div>
+        )}
       </div>
     )
   }
@@ -1217,6 +1647,8 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
   const archName = ALL_ARCHETYPES.find(a => a.id === profile.archetype_id)
   const likedCards = (profile.liked_card_ids || []).map(id => CARDS.find(c => c.id === id)).filter(Boolean)
   const top5 = likedCards.slice(0, 5)
+  const myLikedIds = new Set(myProfile?.liked_card_ids || [])
+  const sharedCards = likedCards.filter(c => myLikedIds.has(c.id)).slice(0, 3)
 
   const rotation = offset.x * 0.1
   const swipeDir = offset.x > 50 ? 'right' : offset.x < -50 ? 'left' : null
@@ -1242,6 +1674,18 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
           <span className="text-white font-bold text-xl" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>discover</span>
           <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{profiles.length - index} left</span>
         </div>
+        {admirer && (
+          <div className="mt-2 flex items-center gap-2.5 px-3 py-2 rounded-xl"
+            style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)' }}>
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0"
+              style={{ background: 'rgba(139,92,246,0.2)', filter: 'blur(0px)' }}>
+              👤
+            </div>
+            <p className="text-xs leading-tight flex-1" style={{ color: 'rgba(255,255,255,0.6)' }}>
+              <span style={{ color: '#a78bfa', fontWeight: 600 }}>Someone</span> already likes your profile — keep swiping to find them
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="relative" style={{ width: 320, height: 480 }}>
@@ -1296,6 +1740,21 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
               </div>
             )}
 
+            {/* Shared interests */}
+            {sharedCards.length > 0 && (
+              <div className="mb-3 w-full">
+                <p className="text-center text-xs mb-1.5 font-medium" style={{ color: 'rgba(251,191,36,0.55)' }}>you both love</p>
+                <div className="flex gap-1.5 flex-wrap justify-center">
+                  {sharedCards.map((c, i) => (
+                    <span key={i} className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                      style={{ background: 'rgba(251,191,36,0.14)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.38)' }}>
+                      {c.emoji} {c.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Compatibility */}
             {compat > 0 && (
               <div className="flex items-center gap-2 px-4 py-2 rounded-full"
@@ -1327,12 +1786,143 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
   )
 }
 
+// ─── CHAT SCREEN ──────────────────────────────────────────────────────────────
+
+function ChatScreen({ match, otherProfile, otherArch, myLikedCards, user, onClose }) {
+  const [messages, setMessages] = useState([])
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [phase, setPhase] = useState(0)
+  const bottomRef = useRef(null)
+  const pollRef = useRef(null)
+
+  const sharedIds = new Set(otherProfile?.liked_card_ids || [])
+  const sharedCards = (myLikedCards || []).filter(c => sharedIds.has(c.id)).slice(0, 3)
+  const icebreakers = sharedCards.map(c => `What got you into ${c.emoji} ${c.label}?`)
+  if (icebreakers.length < 3) icebreakers.push("What's the most surprising thing you're into?", "What would you do with an extra hour every day?")
+
+  const loadMessages = useCallback(async () => {
+    const { data } = await getMessages(match.id)
+    setMessages(data || [])
+  }, [match.id])
+
+  useEffect(() => {
+    loadMessages()
+    setTimeout(() => setPhase(1), 80)
+    pollRef.current = setInterval(loadMessages, 5000)
+    return () => clearInterval(pollRef.current)
+  }, [loadMessages])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const handleSend = async (content = text) => {
+    const trimmed = content.trim()
+    if (!trimmed || sending) return
+    setSending(true)
+    setText('')
+    const optimistic = { id: Date.now(), sender_id: user.id, content: trimmed, created_at: new Date().toISOString() }
+    setMessages(prev => [...prev, optimistic])
+    await sendMessage(match.id, user.id, trimmed)
+    setSending(false)
+    await loadMessages()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col"
+      style={{ background: '#0a0a0f', transform: phase ? 'translateY(0)' : 'translateY(100%)', transition: 'transform 0.4s cubic-bezier(0.16,1,0.3,1)' }}>
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 pt-12 pb-4 flex-shrink-0"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <button onClick={onClose} className="w-9 h-9 rounded-full flex items-center justify-center transition-opacity hover:opacity-70"
+          style={{ background: 'rgba(255,255,255,0.07)' }}>
+          <X size={18} color="rgba(255,255,255,0.6)" />
+        </button>
+        <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl flex-shrink-0"
+          style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)' }}>
+          {otherProfile?.avatar_emoji || otherArch?.emoji || '👤'}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-white font-semibold text-sm truncate">{otherProfile?.display_name || 'Anonymous'}</p>
+          <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.35)' }}>{otherArch?.name || 'Explorer'}</p>
+        </div>
+        {sharedCards.length > 0 && (
+          <div className="flex gap-1">
+            {sharedCards.map((c, i) => <span key={i} className="text-base">{c.emoji}</span>)}
+          </div>
+        )}
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        {messages.length === 0 && (
+          <div className="text-center py-8">
+            <p className="text-sm mb-1" style={{ color: 'rgba(255,255,255,0.3)' }}>Start with a question</p>
+            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.18)' }}>or tap a suggestion below</p>
+          </div>
+        )}
+        {messages.map((msg, i) => {
+          const mine = msg.sender_id === user.id
+          return (
+            <div key={msg.id || i} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+              <div className="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed"
+                style={mine
+                  ? { background: 'rgba(251,191,36,0.18)', color: '#fde68a', borderBottomRightRadius: 6 }
+                  : { background: 'rgba(139,92,246,0.18)', color: '#c4b5fd', borderBottomLeftRadius: 6 }}>
+                {msg.content}
+              </div>
+            </div>
+          )
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Icebreaker chips */}
+      {messages.length === 0 && (
+        <div className="px-4 pb-3 flex gap-2 overflow-x-auto flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
+          {icebreakers.slice(0, 3).map((q, i) => (
+            <button key={i} onClick={() => handleSend(q)}
+              className="flex-shrink-0 px-3 py-2 rounded-full text-xs font-medium transition-opacity hover:opacity-80"
+              style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.1)', whiteSpace: 'nowrap' }}>
+              {q}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Input bar */}
+      <div className="px-4 pb-8 pt-3 flex-shrink-0"
+        style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <div className="flex gap-3 items-end">
+          <input
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+            placeholder="Say something…"
+            className="flex-1 px-4 py-3 rounded-2xl text-sm text-white outline-none"
+            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', caretColor: '#fbbf24' }}
+          />
+          <button
+            onClick={() => handleSend()}
+            disabled={!text.trim() || sending}
+            className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-110 active:scale-95 disabled:opacity-40"
+            style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)' }}>
+            <ChevronRight size={20} color="#000" />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── MY MATCHES SCREEN ────────────────────────────────────────────────────────
 
-function MyMatchesScreen({ user, myArchetype }) {
+function MyMatchesScreen({ user, myArchetype, myProfile }) {
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [matchProfiles, setMatchProfiles] = useState({})
+  const [activeChatMatch, setActiveChatMatch] = useState(null)
 
   useEffect(() => {
     getMyMatches(user.id).then(async ({ data }) => {
@@ -1384,11 +1974,12 @@ function MyMatchesScreen({ user, myArchetype }) {
               const other = matchProfiles[otherId]
               const otherArch = ALL_ARCHETYPES.find(a => a.id === other?.archetype_id)
               const compat = compatibilityScore(
-                bb.sessionManager.getSession()?.user ? {} : {},
+                myProfile?.category_scores || myArchetype?.category_scores,
                 other?.category_scores
               )
               return (
-                <div key={i} className="rounded-2xl p-4 flex items-center gap-4"
+                <button key={i} onClick={() => setActiveChatMatch({ match, other, otherArch })}
+                  className="w-full rounded-2xl p-4 flex items-center gap-4 text-left transition-all hover:scale-[1.01] active:scale-[0.99]"
                   style={{ background: 'linear-gradient(145deg,#1a1428,#141428)', border: '1px solid rgba(139,92,246,0.2)' }}>
                   <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0"
                     style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)' }}>
@@ -1397,19 +1988,35 @@ function MyMatchesScreen({ user, myArchetype }) {
                   <div className="flex-1 min-w-0">
                     <p className="text-white font-semibold text-sm truncate">{other?.display_name || 'Anonymous'}</p>
                     <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                      {otherArch?.name || 'Explorer'}
+                      {otherArch?.name || 'Explorer'}{compat > 0 ? ` · ${compat}% match` : ''}
                     </p>
                   </div>
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0"
-                    style={{ background: 'rgba(139,92,246,0.12)', color: '#8b5cf6', border: '1px solid rgba(139,92,246,0.25)' }}>
-                    Matched
-                  </span>
-                </div>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <span className="text-xs font-bold px-2.5 py-1.5 rounded-full"
+                      style={{ background: 'rgba(139,92,246,0.18)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.35)' }}>
+                      Message →
+                    </span>
+                    <span className="text-xs" style={{ color: 'rgba(255,255,255,0.22)' }}>
+                      {match.created_at ? timeAgo(match.created_at) : ''}
+                    </span>
+                  </div>
+                </button>
               )
             })}
           </div>
         )}
       </div>
+
+      {activeChatMatch && (
+        <ChatScreen
+          match={activeChatMatch.match}
+          otherProfile={activeChatMatch.other}
+          otherArch={activeChatMatch.otherArch}
+          myLikedCards={myProfile?.liked_card_ids?.map(id => CARDS.find(c => c.id === id)).filter(Boolean) || []}
+          user={user}
+          onClose={() => setActiveChatMatch(null)}
+        />
+      )}
     </div>
   )
 }
@@ -1455,11 +2062,30 @@ function WrappedCard({ archetype, liked, innerRef }) {
 
 // ─── PROFILE SCREEN ───────────────────────────────────────────────────────────
 
-function ProfileScreen({ archetype, liked, recommendations, onRestart, user, scores: scoresProp, onSaved, onGoDiscover }) {
+function ProfileScreen({ archetype, liked, recommendations, onRestart, user, scores: scoresProp, onSaved, onGoDiscover, streak, dbProfile, onProfileUpdated }) {
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [displayName, setDisplayName] = useState(dbProfile?.display_name || user?.email?.split('@')[0] || '')
+  const [bio, setBio] = useState(dbProfile?.bio || '')
+  const [savingBio, setSavingBio] = useState(false)
   const scores = scoresProp ?? computeScores(liked)
   const cardRef = useRef(null)
+
+  const handleNameSave = async () => {
+    setEditingName(false)
+    if (!user || !displayName.trim()) return
+    await updateProfile(user.id, { display_name: displayName.trim() })
+    onProfileUpdated?.({ display_name: displayName.trim() })
+  }
+
+  const handleBioSave = async () => {
+    if (!user) return
+    setSavingBio(true)
+    await updateProfile(user.id, { bio: bio.trim() })
+    onProfileUpdated?.({ bio: bio.trim() })
+    setSavingBio(false)
+  }
 
   const shareUrl = getShareUrl(archetype, liked)
 
@@ -1507,19 +2133,95 @@ function ProfileScreen({ archetype, liked, recommendations, onRestart, user, sco
     <div className="min-h-screen px-4 py-10" style={{ background: '#0a0a0f' }}>
       <div className="max-w-sm mx-auto">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-4"
-            style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
-            {archetype.emoji} {archetype.rarityLabel}
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest"
+              style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+              {archetype.emoji} {archetype.rarityLabel}
+            </div>
+            {streak?.count > 0 && (
+              <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold"
+                style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>
+                🔥 {streak.count}d
+              </div>
+            )}
           </div>
           <h1 className="text-white leading-tight"
             style={{ fontFamily: 'Fraunces, serif', fontWeight: 900, fontSize: 34, letterSpacing: '-0.03em' }}>
             {archetype.name}
           </h1>
-          <p className="mt-2 leading-relaxed text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>{archetype.description}</p>
+          <p className="mt-2 leading-relaxed text-sm mb-4" style={{ color: 'rgba(255,255,255,0.5)' }}>{archetype.description}</p>
+
+          {user && (
+            <div className="mb-1">
+              {editingName ? (
+                <input
+                  autoFocus
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                  onBlur={handleNameSave}
+                  onKeyDown={e => e.key === 'Enter' && handleNameSave()}
+                  className="text-center text-sm font-semibold text-white outline-none rounded-xl px-3 py-1.5 w-full max-w-xs"
+                  style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)' }}
+                  maxLength={40}
+                />
+              ) : (
+                <button
+                  onClick={() => setEditingName(true)}
+                  className="flex items-center justify-center gap-1.5 mx-auto text-sm font-semibold transition-opacity hover:opacity-70"
+                  style={{ color: 'rgba(255,255,255,0.6)' }}>
+                  {displayName || 'Add your name'} <span style={{ fontSize: 11, opacity: 0.5 }}>✏️</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {user && (
+            <div className="mx-auto" style={{ maxWidth: 280 }}>
+              <textarea
+                value={bio}
+                onChange={e => setBio(e.target.value.slice(0, 140))}
+                onBlur={handleBioSave}
+                placeholder="Add a line about yourself — 3× more matches"
+                rows={2}
+                className="w-full text-center text-xs leading-relaxed outline-none resize-none bg-transparent"
+                style={{ color: 'rgba(255,255,255,0.35)', caretColor: '#fbbf24' }}
+              />
+              {bio.length > 0 && (
+                <p className="text-center text-xs" style={{ color: 'rgba(255,255,255,0.18)' }}>{bio.length}/140</p>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="rounded-3xl p-4 mb-7" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="rounded-3xl p-4 mb-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <RadarChart scores={scores} size={280} />
+        </div>
+
+        {/* Archetype evolution progress bar */}
+        <div className="rounded-2xl px-4 py-3 mb-7" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold" style={{ color: 'rgba(255,255,255,0.45)' }}>Interests explored</span>
+            <span className="text-xs font-semibold" style={{ color: '#fbbf24' }}>{liked.length}/50</span>
+          </div>
+          <div className="rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)', height: 5 }}>
+            <div className="h-full rounded-full"
+              style={{ width: `${Math.min(100, (liked.length / 50) * 100)}%`, background: 'linear-gradient(90deg,#fbbf24,#f59e0b)', transition: 'width 0.8s cubic-bezier(0.16,1,0.3,1)' }} />
+          </div>
+          {liked.length < 25 && (
+            <p className="text-xs mt-1.5" style={{ color: 'rgba(255,255,255,0.25)' }}>
+              🔒 Your archetype deepens at 25 interests
+            </p>
+          )}
+          {liked.length >= 25 && liked.length < 50 && (
+            <p className="text-xs mt-1.5" style={{ color: 'rgba(255,255,255,0.25)' }}>
+              ✨ Your archetype is evolving — keep going
+            </p>
+          )}
+          {liked.length >= 50 && (
+            <p className="text-xs mt-1.5" style={{ color: '#fbbf24' }}>
+              🏆 All 50 interests explored — rare mind
+            </p>
+          )}
         </div>
 
         {liked.length > 0 && (
@@ -1624,11 +2326,13 @@ export default function App() {
   const [tab, setTab] = useState('profile') // 'profile' | 'discover' | 'matches'
   const [matchData, setMatchData] = useState(null) // { myArchetype, theirProfile }
   const [matchCount, setMatchCount] = useState(0)
+  const [streak, setStreak] = useState(() => loadStreak())
 
-  // Restore auth session and listen for changes
+  // Restore auth session and listen for changes; handle OAuth redirect recovery
   useEffect(() => {
     const session = getSession()
-    if (session?.user) setUser(session.user)
+    const currentUser = session?.user ?? null
+    if (currentUser) setUser(currentUser)
 
     const unsub = onAuthStateChange(({ session: s }) => {
       const u = s?.user ?? null
@@ -1637,6 +2341,22 @@ export default function App() {
         getMyProfile(u.id).then(({ data }) => {
           if (data?.[0]) setDbProfile(data[0])
         })
+        // OAuth redirect recovery: restore pending quick-onboard
+        const raw = localStorage.getItem('polymath_quick')
+        if (raw) {
+          try {
+            const { likedIds } = JSON.parse(raw)
+            const pendingLiked = likedIds.map(id => CARDS.find(c => c.id === id)).filter(Boolean)
+            const arch = computeArchetype(pendingLiked)
+            const sc = computeScores(pendingLiked)
+            localStorage.removeItem('polymath_quick')
+            setLiked(pendingLiked)
+            setArchetype(arch)
+            saveProfile(u.id, { archetype: arch, liked: pendingLiked, scores: sc, recommendations: null, displayName: u.email?.split('@')[0] || 'Explorer' })
+              .then(() => getMyProfile(u.id).then(({ data }) => { if (data?.[0]) setDbProfile(data[0]) }))
+            setScreen('archetype')
+          } catch {}
+        }
       } else {
         setDbProfile(null)
       }
@@ -1650,8 +2370,17 @@ export default function App() {
     getMyMatches(user.id).then(({ data }) => setMatchCount((data || []).length))
   }, [user, matchData])
 
-  // Check localStorage on mount
+  // Check localStorage on mount; if OAuth just returned with a session,
+  // the onAuthStateChange handler above handles the redirect recovery.
+  // Otherwise, set initial screen normally.
   useEffect(() => {
+    const session = getSession()
+    const quickRaw = localStorage.getItem('polymath_quick')
+    if (quickRaw && session?.user) {
+      // Already handled by onAuthStateChange — just wait (screen stays 'loading')
+      return
+    }
+    setStreak(updateStreak())
     const data = loadState()
     if (data) {
       setSaved(data)
@@ -1663,10 +2392,27 @@ export default function App() {
 
   useEffect(() => { window.scrollTo(0, 0) }, [screen, tab])
 
+  const handleQuickSwipeComplete = useCallback(likedCards => {
+    setLiked(likedCards)
+    setArchetype(computeArchetype(likedCards))
+    setScreen('alien-proposal')
+  }, [])
+
   const handleSwipeComplete = useCallback(likedCards => {
     setLiked(likedCards)
     setArchetype(computeArchetype(likedCards))
     setScreen('archetype')
+  }, [])
+
+  const handleAlienSignedUp = useCallback((newUser) => {
+    setUser(newUser)
+    getMyProfile(newUser.id).then(({ data }) => { if (data?.[0]) setDbProfile(data[0]) })
+    setScreen('archetype')
+  }, [])
+
+  const handleAlienSkip = useCallback(() => {
+    // Continue the full 50-card flow from where they left off
+    setScreen('swipe-continue')
   }, [])
 
   const handleMatchesComplete = () => {
@@ -1700,7 +2446,29 @@ export default function App() {
           onRestart={handleRestart}
         />
       )}
-      {screen === 'swipe' && <SwipeScreen onComplete={handleSwipeComplete} />}
+      {screen === 'swipe' && (
+        <SwipeScreen
+          onComplete={handleSwipeComplete}
+          onQuickComplete={handleQuickSwipeComplete}
+        />
+      )}
+      {screen === 'swipe-continue' && (
+        <SwipeScreen
+          onComplete={handleSwipeComplete}
+          startIndex={QUICK_LIMIT}
+          initialLiked={liked}
+        />
+      )}
+      {screen === 'alien-proposal' && archetype && (
+        <AlienProposalScreen
+          liked={liked}
+          archetype={archetype}
+          scores={scores}
+          recommendations={recommendations}
+          onSignedUp={handleAlienSignedUp}
+          onSkip={handleAlienSkip}
+        />
+      )}
       {screen === 'archetype' && archetype && (
         <ArchetypeScreen archetype={archetype} liked={liked} onNext={() => setScreen('recommendations')} />
       )}
@@ -1720,8 +2488,11 @@ export default function App() {
               onRestart={handleRestart}
               user={user}
               scores={scores}
+              streak={streak}
               onSaved={handleProfileSaved}
               onGoDiscover={() => setTab('discover')}
+              dbProfile={dbProfile}
+              onProfileUpdated={fields => setDbProfile(prev => ({ ...prev, ...fields }))}
             />
           )}
           {tab === 'discover' && user && (
@@ -1733,7 +2504,7 @@ export default function App() {
             />
           )}
           {tab === 'matches' && user && (
-            <MyMatchesScreen user={user} myArchetype={archetype} />
+            <MyMatchesScreen user={user} myArchetype={archetype} myProfile={dbProfile} />
           )}
           {user && (
             <BottomNav tab={tab} onTab={setTab} matchCount={matchCount} />
@@ -1744,6 +2515,7 @@ export default function App() {
       {matchData && (
         <MatchModal
           myArchetype={matchData.myArchetype}
+          myLikedCards={liked}
           theirProfile={matchData.theirProfile}
           onClose={() => setMatchData(null)}
           onDiscover={() => { setMatchData(null); setTab('matches') }}
