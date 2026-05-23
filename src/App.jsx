@@ -277,6 +277,45 @@ function getShareUrl(archetype, liked) {
   return `${window.location.origin}${window.location.pathname}?p=${payload}`
 }
 
+// ─── AVATAR EMOJIS ────────────────────────────────────────────────────────────
+
+const AVATAR_EMOJIS = ['🦊','🐺','🦅','🐉','🌙','⚡','🌊','🔮','🌸','🎭','🧬','🌿','🔥','🏔️','✨','🌠','🎯','🦋','🌀','🎪']
+
+// ─── BADGES ───────────────────────────────────────────────────────────────────
+
+const BADGES = [
+  { id: 'first_swipe',  emoji: '👆', name: 'First Taste',       desc: 'Made your first swipe',     check: s => s.liked >= 1 },
+  { id: 'collector',   emoji: '💎', name: 'Collector',          desc: 'Liked 10 interests',        check: s => s.liked >= 10 },
+  { id: 'streak_7',    emoji: '🔥', name: 'Dedicated',          desc: '7-day streak',              check: s => s.streak >= 7 },
+  { id: 'first_match', emoji: '💜', name: 'First Match',        desc: 'Your first mutual match',   check: s => s.matches >= 1 },
+  { id: 'butterfly',   emoji: '🦋', name: 'Social Butterfly',   desc: '5 mutual matches',          check: s => s.matches >= 5 },
+  { id: 'polymath',    emoji: '🌟', name: 'True Polymath',      desc: 'Explored all 50 interests', check: s => s.liked >= 50 },
+  { id: 'complete',    emoji: '🏆', name: 'Completionist',      desc: 'Filled in your bio',        check: s => s.hasBio },
+]
+
+// ─── "WHY WE MATCH" ───────────────────────────────────────────────────────────
+
+const WHY_PHRASES = {
+  mind:        "Two thinkers who never stop questioning.",
+  creative:    "You both turn ideas into something real.",
+  physical:    "Energy meets energy — this one moves.",
+  music:       "You hear the world the same way.",
+  exploration: "Both drawn to what's over the next horizon.",
+  social:      "You make the room better. Both of you.",
+  craft:       "Builders who know the value of slow work.",
+  tech:        "You both see the future before it arrives.",
+  culinary:    "Pleasure-seekers who understand depth.",
+  spiritual:   "Both looking inward — and outward.",
+}
+
+function whyWeMatch(scoresA, scoresB) {
+  if (!scoresA || !scoresB) return null
+  const shared = CATEGORIES
+    .filter(c => (scoresA[c] || 0) > 0 && (scoresB[c] || 0) > 0)
+    .sort((a, b) => Math.min(scoresA[b] || 0, scoresB[b] || 0) - Math.min(scoresA[a] || 0, scoresB[a] || 0))
+  return shared.length ? (WHY_PHRASES[shared[0]] ?? null) : null
+}
+
 function timeAgo(ts) {
   const ms = Date.now() - new Date(ts).getTime()
   const h = Math.floor(ms / 3600000)
@@ -518,18 +557,29 @@ function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initialLiked
   const playSwipe = useSwipeSound()
   const consecutiveRight = useRef(0)
   const [streakMsg, setStreakMsg] = useState(null)
+  const [showTutorial, setShowTutorial] = useState(() => startIndex === 0 && !localStorage.getItem('polymath_swiped'))
 
   useEffect(() => {
+    if (showTutorial) {
+      const t = setTimeout(() => setShowTutorial(false), 3500)
+      return () => clearTimeout(t)
+    }
+  }, [showTutorial])
+
+  useEffect(() => {
+    if (showTutorial) return // skip hint nudge if tutorial is showing
     const t = setTimeout(() => {
       setOffset({ x: 20, y: 0 })
       setTimeout(() => setOffset({ x: 0, y: 0 }), 420)
     }, 900)
     return () => clearTimeout(t)
-  }, [])
+  }, [showTutorial])
 
   const decide = useCallback((direction) => {
     if (isDeciding.current) return
     isDeciding.current = true
+    localStorage.setItem('polymath_swiped', '1')
+    setShowTutorial(false)
     playSwipe(direction)
     if (navigator.vibrate) navigator.vibrate(direction === 'right' ? [30] : [10, 10])
     setExiting(direction)
@@ -687,6 +737,27 @@ function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initialLiked
         </div>
       </div>
 
+      {/* First-swipe tutorial */}
+      {showTutorial && (
+        <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-between px-10"
+          style={{ top: '30%' }}>
+          <div className="flex flex-col items-center gap-2 animate-fade-up" style={{ animationDelay: '0.3s' }}>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center"
+              style={{ background: 'rgba(96,165,250,0.2)', border: '1.5px solid rgba(96,165,250,0.5)' }}>
+              <X size={22} color="#60a5fa" />
+            </div>
+            <span className="text-xs font-semibold" style={{ color: 'rgba(96,165,250,0.8)' }}>pass</span>
+          </div>
+          <div className="flex flex-col items-center gap-2 animate-fade-up" style={{ animationDelay: '0.5s' }}>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center"
+              style={{ background: 'rgba(251,191,36,0.2)', border: '1.5px solid rgba(251,191,36,0.5)' }}>
+              <Heart size={22} color="#fbbf24" />
+            </div>
+            <span className="text-xs font-semibold" style={{ color: 'rgba(251,191,36,0.8)' }}>like</span>
+          </div>
+        </div>
+      )}
+
       {streakMsg && (
         <div className="mt-6 px-5 py-2.5 rounded-2xl text-sm font-semibold text-center animate-bounce-in"
           style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)', maxWidth: 280 }}>
@@ -714,7 +785,7 @@ function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initialLiked
 
 function AlienProposalScreen({ liked, archetype, scores, recommendations, onSignedUp, onSkip }) {
   const [phase, setPhase] = useState(0)
-  const [authMode, setAuthMode] = useState(null) // null | 'email'
+  const [authMode, setAuthMode] = useState(null) // null | 'email' | 'magic'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -723,6 +794,8 @@ function AlienProposalScreen({ liked, archetype, scores, recommendations, onSign
   const [socialLoading, setSocialLoading] = useState(null) // 'google' | 'apple'
   const [error, setError] = useState(null)
   const [emailConfirm, setEmailConfirm] = useState(false)
+  const [magicSent, setMagicSent] = useState(false)
+  const [selectedAvatar, setSelectedAvatar] = useState(archetype.emoji)
 
   useEffect(() => {
     const t1 = setTimeout(() => setPhase(1), 120)
@@ -752,7 +825,7 @@ function AlienProposalScreen({ liked, archetype, scores, recommendations, onSign
       if (authErr) { setError(authErr.message || 'Sign up failed'); setLoading(false); return }
       const userId = data?.user?.id
       if (userId) {
-        await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name })
+        await saveProfile(userId, { archetype, liked, scores, recommendations, displayName: name, avatarEmoji: selectedAvatar })
         onSignedUp(data.user)
       } else {
         setEmailConfirm(true)
@@ -761,6 +834,36 @@ function AlienProposalScreen({ liked, archetype, scores, recommendations, onSign
       setError(err.message || 'Something went wrong')
     }
     setLoading(false)
+  }
+
+  const handleMagicLink = async e => {
+    e.preventDefault()
+    if (!email.trim()) return
+    setLoading(true); setError(null)
+    try {
+      await bb.auth.sendMagicLink?.({ email })
+      setMagicSent(true)
+    } catch (err) {
+      setError('Could not send link. Try email sign-up instead.')
+    }
+    setLoading(false)
+  }
+
+  if (magicSent) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: '#0a0a0f' }}>
+        <div className="w-full max-w-xs text-center">
+          <div className="text-6xl mb-4">✨</div>
+          <h2 className="text-white text-2xl font-bold mb-3" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>Check your inbox</h2>
+          <p className="text-sm leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.45)' }}>
+            Magic link sent to <span style={{ color: '#fbbf24' }}>{email}</span>. Click it to jump straight in.
+          </p>
+          <button onClick={onSkip} className="text-xs transition-opacity hover:opacity-70" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            Continue without account →
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (emailConfirm) {
@@ -873,9 +976,14 @@ function AlienProposalScreen({ liked, archetype, scores, recommendations, onSign
               </div>
 
               <button onClick={() => setAuthMode('email')}
-                className="w-full py-3 rounded-xl text-sm font-medium mb-5 transition-all hover:opacity-80"
+                className="w-full py-3 rounded-xl text-sm font-medium mb-2 transition-all hover:opacity-80"
                 style={{ background: 'rgba(139,92,246,0.12)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.25)' }}>
                 Continue with Email
+              </button>
+              <button onClick={() => setAuthMode('magic')}
+                className="w-full py-2.5 rounded-xl text-sm font-medium mb-5 transition-all hover:opacity-80"
+                style={{ color: 'rgba(255,255,255,0.35)' }}>
+                ✨ Email me a magic link
               </button>
             </>
           )}
@@ -884,6 +992,25 @@ function AlienProposalScreen({ liked, archetype, scores, recommendations, onSign
             <form onSubmit={handleEmailSignUp} className="space-y-2.5 mb-5">
               <button type="button" onClick={() => setAuthMode(null)} className="text-xs mb-1 transition-opacity hover:opacity-70"
                 style={{ color: 'rgba(255,255,255,0.3)' }}>← back</button>
+
+              {/* Avatar picker */}
+              <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <p className="text-xs mb-2.5 font-medium text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>Pick your avatar</p>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {AVATAR_EMOJIS.map(em => (
+                    <button key={em} type="button" onClick={() => setSelectedAvatar(em)}
+                      className="h-10 rounded-xl text-xl flex items-center justify-center transition-all"
+                      style={{
+                        background: selectedAvatar === em ? 'rgba(251,191,36,0.2)' : 'rgba(255,255,255,0.04)',
+                        border: selectedAvatar === em ? '1.5px solid rgba(251,191,36,0.6)' : '1px solid rgba(255,255,255,0.07)',
+                        transform: selectedAvatar === em ? 'scale(1.1)' : 'scale(1)',
+                      }}>
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <input type="text" placeholder="Your name" value={name} onChange={e => setName(e.target.value)} required
                 className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none"
                 style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
@@ -902,6 +1029,21 @@ function AlienProposalScreen({ liked, archetype, scores, recommendations, onSign
                 className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
                 style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', opacity: loading ? 0.7 : 1 }}>
                 {loading ? 'Creating account…' : 'Join Polymath →'}
+              </button>
+            </form>
+          )}
+
+          {authMode === 'magic' && (
+            <form onSubmit={handleMagicLink} className="space-y-2.5 mb-5">
+              <button type="button" onClick={() => setAuthMode(null)} className="text-xs mb-1 transition-opacity hover:opacity-70"
+                style={{ color: 'rgba(255,255,255,0.3)' }}>← back</button>
+              <input type="email" placeholder="Your email" value={email} onChange={e => setEmail(e.target.value)} required
+                className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+              <button type="submit" disabled={loading}
+                className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
+                style={{ background: 'rgba(139,92,246,0.2)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.4)', opacity: loading ? 0.7 : 1 }}>
+                {loading ? 'Sending…' : '✨ Send magic link'}
               </button>
             </form>
           )}
@@ -1469,15 +1611,17 @@ function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, onDiscov
 
 function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
   const [profiles, setProfiles] = useState([])
-  const [index, setIndex] = useState(0)
+  const [swipedIds, setSwipedIds] = useState(new Set())
   const [loading, setLoading] = useState(true)
   const [exiting, setExiting] = useState(null)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
-  const [admirer, setAdmirer] = useState(null) // { userId, profile? }
+  const [admirer, setAdmirer] = useState(null)
+  const [showFilters, setShowFilters] = useState(false)
+  const [minCompat, setMinCompat] = useState(0)
+  const [categoryFilter, setCategoryFilter] = useState(new Set())
 
   const isDeciding = useRef(false)
-  const indexRef = useRef(0)
   const dragStart = useRef(null)
   const playSwipe = useSwipeSound()
 
@@ -1488,7 +1632,6 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
     ]).then(async ([{ data: profileData }, admireIds]) => {
       const regular = profileData || []
       setProfiles(regular)
-      // Find one admirer not already in the deck
       const deckIds = new Set(regular.map(p => p.user_id))
       const freshAdmirerId = admireIds.find(id => !deckIds.has(id))
       if (freshAdmirerId) {
@@ -1499,13 +1642,27 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
     })
   }, [user.id])
 
+  const filteredProfiles = profiles.filter(p => {
+    if (swipedIds.has(p.user_id)) return false
+    if (minCompat > 0) {
+      const c = compatibilityScore(myProfile?.category_scores, p.category_scores)
+      if (c < minCompat) return false
+    }
+    if (categoryFilter.size > 0) {
+      const pCats = new Set(Object.entries(p.category_scores || {}).filter(([,v]) => v > 0).map(([k]) => k))
+      if (![...categoryFilter].some(cat => pCats.has(cat))) return false
+    }
+    return true
+  })
+
   const decide = useCallback(async (direction) => {
-    if (isDeciding.current || indexRef.current >= profiles.length) return
+    if (isDeciding.current || filteredProfiles.length === 0) return
     isDeciding.current = true
     playSwipe(direction)
+    if (navigator.vibrate) navigator.vibrate(direction === 'right' ? [20] : [10])
     setExiting(direction)
 
-    const profile = profiles[indexRef.current]
+    const profile = filteredProfiles[0]
 
     setTimeout(async () => {
       await recordSwipe(user.id, profile.user_id, direction === 'right' ? 'like' : 'pass')
@@ -1515,20 +1672,17 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
         if (mutual) {
           await createMatch(user.id, profile.user_id)
           onMatch?.(profile)
-          if (admirer?.userId === profile.user_id) setAdmirer(null)
         }
       }
-      // Swiped past the admirer without a match — clear teaser
       if (admirer?.userId === profile.user_id) setAdmirer(null)
 
-      indexRef.current += 1
-      setIndex(i => i + 1)
+      setSwipedIds(prev => new Set([...prev, profile.user_id]))
       setOffset({ x: 0, y: 0 })
       setExiting(null)
       isDeciding.current = false
       dragStart.current = null
     }, 380)
-  }, [profiles, user.id, onMatch, playSwipe])
+  }, [filteredProfiles, user.id, onMatch, playSwipe, admirer])
 
   useEffect(() => {
     const onKey = e => {
@@ -1557,6 +1711,14 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
     dragStart.current = null
   }
 
+  const toggleCategory = (cat) => {
+    setCategoryFilter(prev => {
+      const next = new Set(prev)
+      next.has(cat) ? next.delete(cat) : next.add(cat)
+      return next
+    })
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0a0f', paddingBottom: 80 }}>
@@ -1567,7 +1729,7 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
     )
   }
 
-  if (profiles.length === 0 || index >= profiles.length) {
+  if (profiles.length === 0 || filteredProfiles.length === 0) {
     const isEmpty = profiles.length === 0
     const inviteText = `I just found out I'm The ${user?.email?.split('@')[0] || 'Explorer'} on Polymath — what are you? 60-second test → ${window.location.origin}`
     const handleInvite = () => {
@@ -1578,7 +1740,6 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
       }
     }
 
-    // Daily discovery card — date-seeded from un-liked cards
     const myLikedIdsEmpty = new Set(myProfile?.liked_card_ids || [])
     const unlikedCards = CARDS.filter(c => !myLikedIdsEmpty.has(c.id))
     const todayKey = new Date().toDateString()
@@ -1599,19 +1760,29 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
       <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={{ background: '#0a0a0f', paddingBottom: 80 }}>
         <div className="text-5xl mb-4">🌌</div>
         <h2 className="text-white text-2xl font-bold mb-3" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
-          {isEmpty ? "You're one of the first here." : "You've seen everyone."}
+          {isEmpty ? "You're one of the first here." : filteredProfiles.length === 0 && profiles.length > 0 ? "No profiles match your filters." : "You've seen everyone."}
         </h2>
         <p className="text-sm leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.4)', maxWidth: 260 }}>
           {isEmpty
             ? "The people who join now will define this community."
+            : filteredProfiles.length === 0 && profiles.length > 0
+            ? "Try adjusting your filters to see more people."
             : "Invite friends — new matches appear when they join."}
         </p>
-        <button
-          onClick={handleInvite}
-          className="px-6 py-3 rounded-2xl font-bold text-sm mb-8 transition-all hover:scale-[1.03] active:scale-[0.97]"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', boxShadow: '0 0 30px rgba(139,92,246,0.3)' }}>
-          {isEmpty ? '✨ Invite friends & unlock matches' : '🔗 Invite more people'}
-        </button>
+        {filteredProfiles.length === 0 && profiles.length > 0 ? (
+          <button onClick={() => { setMinCompat(0); setCategoryFilter(new Set()) }}
+            className="px-6 py-3 rounded-2xl font-bold text-sm mb-8 transition-all hover:scale-[1.03]"
+            style={{ background: 'rgba(255,255,255,0.08)', color: 'white', border: '1px solid rgba(255,255,255,0.15)' }}>
+            Clear filters
+          </button>
+        ) : (
+          <button
+            onClick={handleInvite}
+            className="px-6 py-3 rounded-2xl font-bold text-sm mb-8 transition-all hover:scale-[1.03] active:scale-[0.97]"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', boxShadow: '0 0 30px rgba(139,92,246,0.3)' }}>
+            {isEmpty ? '✨ Invite friends & unlock matches' : '🔗 Invite more people'}
+          </button>
+        )}
 
         {todayCard && (
           <div className="w-full max-w-xs">
@@ -1640,10 +1811,11 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
     )
   }
 
-  const profile = profiles[index]
-  const nextProfile = profiles[index + 1]
+  const profile = filteredProfiles[0]
+  const nextProfile = filteredProfiles[1]
   const scores = profile.category_scores || {}
   const compat = compatibilityScore(myProfile?.category_scores, scores)
+  const whyPhrase = whyWeMatch(myProfile?.category_scores, scores)
   const archName = ALL_ARCHETYPES.find(a => a.id === profile.archetype_id)
   const likedCards = (profile.liked_card_ids || []).map(id => CARDS.find(c => c.id === id)).filter(Boolean)
   const top5 = likedCards.slice(0, 5)
@@ -1666,19 +1838,71 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
     ? '0 0 70px rgba(59,130,246,0.4), 0 30px 80px rgba(0,0,0,0.6)'
     : '0 30px 80px rgba(0,0,0,0.6)'
 
+  const activeFilterCount = (minCompat > 0 ? 1 : 0) + categoryFilter.size
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center select-none"
       style={{ background: '#0a0a0f', paddingBottom: 96 }}>
       <div className="w-full max-w-xs px-6 mb-5">
         <div className="flex items-center justify-between mb-1">
           <span className="text-white font-bold text-xl" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>discover</span>
-          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{profiles.length - index} left</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{filteredProfiles.length} left</span>
+            <button onClick={() => setShowFilters(f => !f)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
+              style={{
+                background: showFilters || activeFilterCount > 0 ? 'rgba(251,191,36,0.12)' : 'rgba(255,255,255,0.06)',
+                color: showFilters || activeFilterCount > 0 ? '#fbbf24' : 'rgba(255,255,255,0.4)',
+                border: showFilters || activeFilterCount > 0 ? '1px solid rgba(251,191,36,0.3)' : '1px solid rgba(255,255,255,0.1)',
+              }}>
+              ⚙ {activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount > 1 ? 's' : ''}` : 'Filter'}
+            </button>
+          </div>
         </div>
+
+        {/* Filter bar */}
+        {showFilters && (
+          <div className="mt-2 rounded-2xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.5)' }}>Min compatibility</span>
+                <span className="text-xs font-bold" style={{ color: minCompat > 0 ? '#fbbf24' : 'rgba(255,255,255,0.3)' }}>{minCompat > 0 ? `${minCompat}%+` : 'Any'}</span>
+              </div>
+              <input type="range" min={0} max={80} step={10} value={minCompat} onChange={e => setMinCompat(Number(e.target.value))}
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                style={{ accentColor: '#fbbf24', background: `linear-gradient(to right, #fbbf24 ${minCompat / 80 * 100}%, rgba(255,255,255,0.1) 0%)` }} />
+            </div>
+            <div>
+              <p className="text-xs font-medium mb-2" style={{ color: 'rgba(255,255,255,0.5)' }}>Shared interests in</p>
+              <div className="flex flex-wrap gap-1.5">
+                {CATEGORIES.map(cat => (
+                  <button key={cat} onClick={() => toggleCategory(cat)}
+                    className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+                    style={{
+                      background: categoryFilter.has(cat) ? `${CATEGORY_COLORS[cat]}22` : 'rgba(255,255,255,0.04)',
+                      color: categoryFilter.has(cat) ? CATEGORY_COLORS[cat] : 'rgba(255,255,255,0.35)',
+                      border: categoryFilter.has(cat) ? `1px solid ${CATEGORY_COLORS[cat]}55` : '1px solid rgba(255,255,255,0.08)',
+                    }}>
+                    {CATEGORY_LABELS[cat]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {activeFilterCount > 0 && (
+              <button onClick={() => { setMinCompat(0); setCategoryFilter(new Set()) }}
+                className="mt-2 w-full py-1.5 text-xs rounded-lg transition-opacity hover:opacity-70"
+                style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                Clear all
+              </button>
+            )}
+          </div>
+        )}
+
         {admirer && (
           <div className="mt-2 flex items-center gap-2.5 px-3 py-2 rounded-xl"
             style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)' }}>
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0"
-              style={{ background: 'rgba(139,92,246,0.2)', filter: 'blur(0px)' }}>
+              style={{ background: 'rgba(139,92,246,0.2)' }}>
               👤
             </div>
             <p className="text-xs leading-tight flex-1" style={{ color: 'rgba(255,255,255,0.6)' }}>
@@ -1712,9 +1936,9 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
           </div>
 
           {/* Content */}
-          <div className="flex flex-col items-center justify-center flex-1 px-6 pt-8 pb-4">
+          <div className="flex flex-col items-center justify-center flex-1 px-6 pt-8 pb-2">
             {/* Avatar */}
-            <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4"
+            <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-3"
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
               {profile.avatar_emoji || archName?.emoji || '👤'}
             </div>
@@ -1723,14 +1947,21 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
             <p className="text-white font-bold text-xl mb-1 text-center" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
               {profile.display_name || 'Anonymous'}
             </p>
-            <span className="px-3 py-1 rounded-full text-xs font-semibold mb-4"
+            <span className="px-3 py-1 rounded-full text-xs font-semibold mb-2"
               style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)' }}>
               {archName?.name || 'Explorer'}
             </span>
 
+            {/* Bio */}
+            {profile.bio && (
+              <p className="text-xs text-center mb-3 px-2 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)', fontStyle: 'italic' }}>
+                "{profile.bio}"
+              </p>
+            )}
+
             {/* Top interests */}
             {top5.length > 0 && (
-              <div className="flex gap-2 mb-4 flex-wrap justify-center">
+              <div className="flex gap-1.5 mb-3 flex-wrap justify-center">
                 {top5.map((c, i) => (
                   <span key={i} className="px-2.5 py-1 rounded-full text-xs"
                     style={{ background: `${CATEGORY_COLORS[c.category]}12`, color: CATEGORY_COLORS[c.category], border: `1px solid ${CATEGORY_COLORS[c.category]}28` }}>
@@ -1742,7 +1973,7 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
 
             {/* Shared interests */}
             {sharedCards.length > 0 && (
-              <div className="mb-3 w-full">
+              <div className="mb-2 w-full">
                 <p className="text-center text-xs mb-1.5 font-medium" style={{ color: 'rgba(251,191,36,0.55)' }}>you both love</p>
                 <div className="flex gap-1.5 flex-wrap justify-center">
                   {sharedCards.map((c, i) => (
@@ -1755,16 +1986,19 @@ function DiscoverScreen({ user, myProfile, myArchetype, onMatch }) {
               </div>
             )}
 
-            {/* Compatibility */}
+            {/* Compatibility + Why phrase */}
             {compat > 0 && (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full"
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full mb-1"
                 style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)' }}>
                 <span className="text-xs font-bold" style={{ color: '#8b5cf6' }}>{compat}% compatible</span>
               </div>
             )}
+            {whyPhrase && (
+              <p className="text-xs text-center px-3" style={{ color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>"{whyPhrase}"</p>
+            )}
           </div>
 
-          <p className="text-center pb-4 text-xs pointer-events-none" style={{ color: 'rgba(255,255,255,0.2)' }}>
+          <p className="text-center pb-3 text-xs pointer-events-none" style={{ color: 'rgba(255,255,255,0.2)' }}>
             ← drag or arrow keys →
           </p>
         </div>
@@ -1923,6 +2157,7 @@ function MyMatchesScreen({ user, myArchetype, myProfile }) {
   const [loading, setLoading] = useState(true)
   const [matchProfiles, setMatchProfiles] = useState({})
   const [activeChatMatch, setActiveChatMatch] = useState(null)
+  const [seenMatchIds, setSeenMatchIds] = useState(() => new Set(JSON.parse(localStorage.getItem('polymath_seen_matches') || '[]')))
 
   useEffect(() => {
     getMyMatches(user.id).then(async ({ data }) => {
@@ -1978,7 +2213,14 @@ function MyMatchesScreen({ user, myArchetype, myProfile }) {
                 other?.category_scores
               )
               return (
-                <button key={i} onClick={() => setActiveChatMatch({ match, other, otherArch })}
+                <button key={i} onClick={() => {
+                  setActiveChatMatch({ match, other, otherArch })
+                  setSeenMatchIds(prev => {
+                    const next = new Set([...prev, match.id])
+                    try { localStorage.setItem('polymath_seen_matches', JSON.stringify([...next])) } catch {}
+                    return next
+                  })
+                }}
                   className="w-full rounded-2xl p-4 flex items-center gap-4 text-left transition-all hover:scale-[1.01] active:scale-[0.99]"
                   style={{ background: 'linear-gradient(145deg,#1a1428,#141428)', border: '1px solid rgba(139,92,246,0.2)' }}>
                   <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0"
@@ -1992,10 +2234,15 @@ function MyMatchesScreen({ user, myArchetype, myProfile }) {
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <span className="text-xs font-bold px-2.5 py-1.5 rounded-full"
-                      style={{ background: 'rgba(139,92,246,0.18)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.35)' }}>
-                      Message →
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {!seenMatchIds.has(match.id) && (
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: '#8b5cf6', boxShadow: '0 0 6px rgba(139,92,246,0.7)' }} />
+                      )}
+                      <span className="text-xs font-bold px-2.5 py-1.5 rounded-full"
+                        style={{ background: 'rgba(139,92,246,0.18)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.35)' }}>
+                        Message →
+                      </span>
+                    </div>
                     <span className="text-xs" style={{ color: 'rgba(255,255,255,0.22)' }}>
                       {match.created_at ? timeAgo(match.created_at) : ''}
                     </span>
@@ -2062,15 +2309,24 @@ function WrappedCard({ archetype, liked, innerRef }) {
 
 // ─── PROFILE SCREEN ───────────────────────────────────────────────────────────
 
-function ProfileScreen({ archetype, liked, recommendations, onRestart, user, scores: scoresProp, onSaved, onGoDiscover, streak, dbProfile, onProfileUpdated }) {
+function ProfileScreen({ archetype, liked, recommendations, onRestart, user, scores: scoresProp, onSaved, onGoDiscover, streak, dbProfile, onProfileUpdated, matchCount }) {
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [editingName, setEditingName] = useState(false)
   const [displayName, setDisplayName] = useState(dbProfile?.display_name || user?.email?.split('@')[0] || '')
   const [bio, setBio] = useState(dbProfile?.bio || '')
   const [savingBio, setSavingBio] = useState(false)
+  const [pushGranted, setPushGranted] = useState(() => typeof Notification !== 'undefined' && Notification.permission === 'granted')
   const scores = scoresProp ?? computeScores(liked)
   const cardRef = useRef(null)
+
+  const requestPush = async () => {
+    if (!('Notification' in window)) return
+    const perm = await Notification.requestPermission()
+    setPushGranted(perm === 'granted')
+  }
+
+  const badgeStats = { liked: liked.length, streak: streak?.count || 0, matches: matchCount || 0, hasBio: !!(dbProfile?.bio) }
 
   const handleNameSave = async () => {
     setEditingName(false)
@@ -2223,6 +2479,44 @@ function ProfileScreen({ archetype, liked, recommendations, onRestart, user, sco
             </p>
           )}
         </div>
+
+        {/* Badges */}
+        <div className="mb-7">
+          <h2 className="font-bold text-base mb-3" style={{ fontFamily: 'Fraunces, serif', color: 'rgba(255,255,255,0.85)' }}>Badges</h2>
+          <div className="grid grid-cols-4 gap-2">
+            {BADGES.map(badge => {
+              const earned = badge.check(badgeStats)
+              return (
+                <div key={badge.id} className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl text-center"
+                  style={{
+                    background: earned ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)',
+                    border: earned ? '1px solid rgba(251,191,36,0.25)' : '1px solid rgba(255,255,255,0.07)',
+                    opacity: earned ? 1 : 0.45,
+                  }}>
+                  <span className="text-2xl">{earned ? badge.emoji : '🔒'}</span>
+                  <span className="text-xs font-semibold leading-tight" style={{ color: earned ? '#fbbf24' : 'rgba(255,255,255,0.4)', fontSize: 9 }}>{badge.name}</span>
+                  {earned && <span className="text-xs" style={{ color: 'rgba(255,255,255,0.25)', fontSize: 8 }}>{badge.desc}</span>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Push notifications */}
+        {user && typeof Notification !== 'undefined' && Notification.permission !== 'granted' && !pushGranted && (
+          <div className="rounded-2xl p-4 mb-7 flex items-center gap-4"
+            style={{ background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.2)' }}>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-white mb-0.5">Stay in the loop</p>
+              <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>Get notified when you match</p>
+            </div>
+            <button onClick={requestPush}
+              className="px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] flex-shrink-0"
+              style={{ background: 'rgba(139,92,246,0.2)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.35)' }}>
+              Enable
+            </button>
+          </div>
+        )}
 
         {liked.length > 0 && (
           <div className="mb-7">
@@ -2493,6 +2787,7 @@ export default function App() {
               onGoDiscover={() => setTab('discover')}
               dbProfile={dbProfile}
               onProfileUpdated={fields => setDbProfile(prev => ({ ...prev, ...fields }))}
+              matchCount={matchCount}
             />
           )}
           {tab === 'discover' && user && (

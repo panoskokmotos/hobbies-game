@@ -40,7 +40,7 @@ export const onAuthStateChange = (cb) => bb.onAuthStateChange(cb)
 
 // ─── PROFILES ─────────────────────────────────────────────────────────────────
 
-export const saveProfile = (userId, { archetype, liked, scores, recommendations, displayName }) =>
+export const saveProfile = (userId, { archetype, liked, scores, recommendations, displayName, avatarEmoji }) =>
   bb.from('profiles').insert({
     user_id: userId,
     archetype_id: archetype.id,
@@ -48,7 +48,7 @@ export const saveProfile = (userId, { archetype, liked, scores, recommendations,
     category_scores: scores,
     recommendations,
     display_name: displayName,
-    avatar_emoji: archetype.emoji,
+    avatar_emoji: avatarEmoji ?? archetype.emoji,
   })
 
 export const getMyProfile = (userId) =>
