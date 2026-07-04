@@ -110,6 +110,10 @@ export function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initi
   const nextCard = CARDS[index + 1]
   const thirdCard = CARDS[index + 2]
   const total = onQuickComplete ? QUICK_LIMIT : CARDS.length - startIndex
+  // Only the "keep swiping past the quick 5" continuation can feel like a
+  // wall of cards (up to 45 more) — the quick intro itself is already short
+  // and leads straight to signup, so it doesn't need an early-out.
+  const canExitEarly = !onQuickComplete && startIndex > 0
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center select-none"
@@ -203,6 +207,14 @@ export function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initi
           <Heart size={26} color="#fbbf24" />
         </button>
       </div>
+
+      {canExitEarly && (
+        <button onClick={() => onComplete(liked)}
+          className="mt-5 text-xs transition-opacity hover:opacity-70"
+          style={{ color: 'rgba(255,255,255,0.3)' }}>
+          I've seen enough — show my results →
+        </button>
+      )}
     </div>
   )
 }
