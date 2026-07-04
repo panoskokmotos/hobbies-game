@@ -24,11 +24,11 @@ export function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, o
 
       {sharedCards.length > 0 ? (
         <div className="mb-6">
-          <p className="text-xs mb-2 font-medium" style={{ color: 'rgba(251,191,36,0.6)' }}>You both love</p>
+          <p className="text-xs mb-2 font-medium" style={{ color: 'rgba(253,41,123,0.6)' }}>You both love</p>
           <div className="flex gap-1.5 flex-wrap justify-center">
             {sharedCards.map((c, i) => (
               <span key={i} className="px-2.5 py-1 rounded-full text-xs font-semibold"
-                style={{ background: 'rgba(251,191,36,0.14)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.38)' }}>
+                style={{ background: 'rgba(253,41,123,0.14)', color: '#fd297b', border: '1px solid rgba(253,41,123,0.38)' }}>
                 {c.emoji} {c.label}
               </span>
             ))}
@@ -43,7 +43,7 @@ export function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, o
       <div className="flex justify-center gap-6 mb-6">
         <div className="flex flex-col items-center gap-2">
           <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl"
-            style={{ background: 'rgba(251,191,36,0.12)', border: '2px solid rgba(251,191,36,0.3)' }}>
+            style={{ background: 'rgba(253,41,123,0.12)', border: '2px solid rgba(253,41,123,0.3)' }}>
             {myArchetype?.emoji}
           </div>
           <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>You</span>
@@ -61,7 +61,7 @@ export function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, o
       <button
         onClick={() => setWaved(true)}
         className="w-full py-3.5 rounded-2xl font-bold mb-3 transition-all hover:scale-[1.02] active:scale-[0.98]"
-        style={{ background: waved ? 'rgba(251,191,36,0.12)' : 'rgba(251,191,36,0.15)', color: waved ? '#fbbf24' : '#fbbf24', border: '1px solid rgba(251,191,36,0.35)' }}>
+        style={{ background: waved ? 'rgba(253,41,123,0.12)' : 'rgba(253,41,123,0.15)', color: waved ? '#fd297b' : '#fd297b', border: '1px solid rgba(253,41,123,0.35)' }}>
         {waved ? '👋 Wave sent!' : 'Send a Wave 👋'}
       </button>
       <button onClick={onDiscover}

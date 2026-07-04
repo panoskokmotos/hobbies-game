@@ -217,9 +217,9 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
             <button onClick={() => setShowFilters(f => !f)}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
               style={{
-                background: showFilters || activeFilterCount > 0 ? 'rgba(251,191,36,0.12)' : 'rgba(255,255,255,0.06)',
-                color: showFilters || activeFilterCount > 0 ? '#fbbf24' : 'rgba(255,255,255,0.4)',
-                border: showFilters || activeFilterCount > 0 ? '1px solid rgba(251,191,36,0.3)' : '1px solid rgba(255,255,255,0.1)',
+                background: showFilters || activeFilterCount > 0 ? 'rgba(253,41,123,0.12)' : 'rgba(255,255,255,0.06)',
+                color: showFilters || activeFilterCount > 0 ? '#fd297b' : 'rgba(255,255,255,0.4)',
+                border: showFilters || activeFilterCount > 0 ? '1px solid rgba(253,41,123,0.3)' : '1px solid rgba(255,255,255,0.1)',
               }}>
               ⚙ {activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount > 1 ? 's' : ''}` : 'Filter'}
             </button>
@@ -231,11 +231,11 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.5)' }}>Min compatibility</span>
-                <span className="text-xs font-bold" style={{ color: minCompat > 0 ? '#fbbf24' : 'rgba(255,255,255,0.3)' }}>{minCompat > 0 ? `${minCompat}%+` : 'Any'}</span>
+                <span className="text-xs font-bold" style={{ color: minCompat > 0 ? '#fd297b' : 'rgba(255,255,255,0.3)' }}>{minCompat > 0 ? `${minCompat}%+` : 'Any'}</span>
               </div>
               <input type="range" min={0} max={80} step={10} value={minCompat} onChange={e => setMinCompat(Number(e.target.value))}
                 className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                style={{ accentColor: '#fbbf24', background: `linear-gradient(to right, #fbbf24 ${minCompat / 80 * 100}%, rgba(255,255,255,0.1) 0%)` }} />
+                style={{ accentColor: '#fd297b', background: `linear-gradient(to right, #fd297b ${minCompat / 80 * 100}%, rgba(255,255,255,0.1) 0%)` }} />
             </div>
             <div>
               <p className="text-xs font-medium mb-2" style={{ color: 'rgba(255,255,255,0.5)' }}>Shared interests in</p>
@@ -297,7 +297,7 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
             {profile.display_name || 'Anonymous'}
           </p>
           <span className="px-3 py-1 rounded-full text-xs font-semibold mb-2"
-            style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)' }}>
+            style={{ background: 'rgba(253,41,123,0.12)', color: '#fd297b', border: '1px solid rgba(253,41,123,0.25)' }}>
             {archName?.name || 'Explorer'}
           </span>
 
@@ -320,11 +320,11 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
 
           {sharedCards.length > 0 && (
             <div className="mb-2 w-full">
-              <p className="text-center text-xs mb-1.5 font-medium" style={{ color: 'rgba(251,191,36,0.55)' }}>you both love</p>
+              <p className="text-center text-xs mb-1.5 font-medium" style={{ color: 'rgba(253,41,123,0.55)' }}>you both love</p>
               <div className="flex gap-1.5 flex-wrap justify-center">
                 {sharedCards.map((c, i) => (
                   <span key={i} className="px-2.5 py-1 rounded-full text-xs font-semibold"
-                    style={{ background: 'rgba(251,191,36,0.14)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.38)' }}>
+                    style={{ background: 'rgba(253,41,123,0.14)', color: '#fd297b', border: '1px solid rgba(253,41,123,0.38)' }}>
                     {c.emoji} {c.label}
                   </span>
                 ))}
@@ -366,8 +366,8 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
         </button>
         <button onClick={() => decide('right')}
           className="w-16 h-16 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
-          style={{ background: 'rgba(251,191,36,0.12)', border: '1.5px solid rgba(251,191,36,0.35)' }}>
-          <Heart size={26} color="#fbbf24" />
+          style={{ background: 'rgba(253,41,123,0.12)', border: '1.5px solid rgba(253,41,123,0.35)' }}>
+          <Heart size={26} color="#fd297b" />
         </button>
       </div>
     </div>

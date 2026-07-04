@@ -174,10 +174,22 @@ export default function Router() {
 
   if (screen === 'loading') return null
 
-  const showSocialUI = screen === 'profile' && archetype && user
+  // The nav is now persistent chrome from the very first screen (not just
+  // once signed in), so the app feels like a real app immediately rather
+  // than a bare quiz. Before there's a real profile/matches to show, tabs
+  // map to "where you conceptually are" but stay locked (visible for
+  // orientation, not free navigation) — the linear onboarding flow itself
+  // is unchanged, this is purely chrome + continuity.
+  const isFullyOnboarded = screen === 'profile' && !!user
+  const showNav = screen !== 'shared'
+  const preSignupTab = screen === 'matches' ? 'matches'
+    : screen === 'swipe' || screen === 'swipe-continue' ? 'discover'
+    : 'profile'
+  const effectiveTab = isFullyOnboarded ? tab : preSignupTab
+  const lockedTabs = isFullyOnboarded ? [] : ['profile', 'discover', 'likes', 'matches'].filter(id => id !== effectiveTab)
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0f', paddingBottom: showSocialUI ? 72 : 0 }}>
+    <div style={{ minHeight: '100vh', background: '#0a0a0f', paddingBottom: showNav ? 72 : 0 }}>
       {screen === 'shared' && sharedProfile && (
         <SharedProfileScreen shared={sharedProfile} onContinue={handleSharedContinue} />
       )}
@@ -257,10 +269,17 @@ export default function Router() {
           {tab === 'matches' && user && (
             <MyMatchesScreen user={user} myProfile={dbProfile} />
           )}
-          {user && (
-            <BottomNav tab={tab} onTab={setTab} matchCount={matchCount} admirerCount={admirerCount} />
-          )}
         </>
+      )}
+
+      {showNav && (
+        <BottomNav
+          tab={effectiveTab}
+          onTab={isFullyOnboarded ? setTab : () => {}}
+          matchCount={matchCount}
+          admirerCount={admirerCount}
+          lockedTabs={lockedTabs}
+        />
       )}
 
       {matchData && (

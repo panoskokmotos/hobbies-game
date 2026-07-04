@@ -5,6 +5,7 @@ import { BADGES } from '../data/badges.js'
 import { CATEGORY_COLORS } from '../data/categories.js'
 import { computeScores, getShareUrl } from '../lib/helpers.js'
 import { updateProfile } from '../lib/api.js'
+import { subscribeToPush } from '../lib/push.js'
 import { useAuthForm } from '../hooks/useAuthForm.js'
 import { AuthForm } from '../components/auth/AuthForm.jsx'
 import { RadarChart } from '../components/RadarChart.jsx'
@@ -101,14 +102,17 @@ export function ProfileScreen({ archetype, liked, recommendations, onRestart, us
   const [editingName, setEditingName] = useState(false)
   const [displayName, setDisplayName] = useState(dbProfile?.display_name || user?.email?.split('@')[0] || '')
   const [bio, setBio] = useState(dbProfile?.bio || '')
-  const [pushGranted, setPushGranted] = useState(() => typeof Notification !== 'undefined' && Notification.permission === 'granted')
+  const [pushGranted, setPushGranted] = useState(() => !!dbProfile?.push_subscription)
+  const [pushPending, setPushPending] = useState(false)
   const scores = scoresProp ?? computeScores(liked)
   const cardRef = useRef(null)
 
   const requestPush = async () => {
-    if (!('Notification' in window)) return
-    const perm = await Notification.requestPermission()
-    setPushGranted(perm === 'granted')
+    if (!user) return
+    setPushPending(true)
+    const { subscribed } = await subscribeToPush(user.id)
+    setPushGranted(subscribed)
+    setPushPending(false)
   }
 
   const badgeStats = { liked: liked.length, streak: streak?.count || 0, matches: matchCount || 0, hasBio: !!(dbProfile?.bio) }
@@ -174,7 +178,7 @@ export function ProfileScreen({ archetype, liked, recommendations, onRestart, us
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest"
-              style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+              style={{ background: 'rgba(253,41,123,0.12)', color: '#fd297b', border: '1px solid rgba(253,41,123,0.3)' }}>
               {archetype.emoji} {archetype.rarityLabel}
             </div>
             {streak?.count > 0 && (
@@ -223,7 +227,7 @@ export function ProfileScreen({ archetype, liked, recommendations, onRestart, us
                 placeholder="Add a line about yourself — 3× more matches"
                 rows={2}
                 className="w-full text-center text-xs leading-relaxed outline-none resize-none bg-transparent"
-                style={{ color: 'rgba(255,255,255,0.35)', caretColor: '#fbbf24' }}
+                style={{ color: 'rgba(255,255,255,0.35)', caretColor: '#fd297b' }}
               />
               {bio.length > 0 && (
                 <p className="text-center text-xs" style={{ color: 'rgba(255,255,255,0.18)' }}>{bio.length}/140</p>
@@ -248,11 +252,11 @@ export function ProfileScreen({ archetype, liked, recommendations, onRestart, us
         <div className="rounded-2xl px-4 py-3 mb-7" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold" style={{ color: 'rgba(255,255,255,0.45)' }}>Interests explored</span>
-            <span className="text-xs font-semibold" style={{ color: '#fbbf24' }}>{liked.length}/50</span>
+            <span className="text-xs font-semibold" style={{ color: '#fd297b' }}>{liked.length}/50</span>
           </div>
           <div className="rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)', height: 5 }}>
             <div className="h-full rounded-full"
-              style={{ width: `${Math.min(100, (liked.length / 50) * 100)}%`, background: 'linear-gradient(90deg,#fbbf24,#f59e0b)', transition: 'width 0.8s cubic-bezier(0.16,1,0.3,1)' }} />
+              style={{ width: `${Math.min(100, (liked.length / 50) * 100)}%`, background: 'linear-gradient(90deg,#fd297b,#ff655b)', transition: 'width 0.8s cubic-bezier(0.16,1,0.3,1)' }} />
           </div>
           {liked.length < 25 && (
             <p className="text-xs mt-1.5" style={{ color: 'rgba(255,255,255,0.25)' }}>
@@ -265,7 +269,7 @@ export function ProfileScreen({ archetype, liked, recommendations, onRestart, us
             </p>
           )}
           {liked.length >= 50 && (
-            <p className="text-xs mt-1.5" style={{ color: '#fbbf24' }}>
+            <p className="text-xs mt-1.5" style={{ color: '#fd297b' }}>
               🏆 All 50 interests explored — rare mind
             </p>
           )}
@@ -280,12 +284,12 @@ export function ProfileScreen({ archetype, liked, recommendations, onRestart, us
               return (
                 <div key={badge.id} className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl text-center"
                   style={{
-                    background: earned ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)',
-                    border: earned ? '1px solid rgba(251,191,36,0.25)' : '1px solid rgba(255,255,255,0.07)',
+                    background: earned ? 'rgba(253,41,123,0.08)' : 'rgba(255,255,255,0.03)',
+                    border: earned ? '1px solid rgba(253,41,123,0.25)' : '1px solid rgba(255,255,255,0.07)',
                     opacity: earned ? 1 : 0.45,
                   }}>
                   <span className="text-2xl">{earned ? badge.emoji : '🔒'}</span>
-                  <span className="text-xs font-semibold leading-tight" style={{ color: earned ? '#fbbf24' : 'rgba(255,255,255,0.4)', fontSize: 9 }}>{badge.name}</span>
+                  <span className="text-xs font-semibold leading-tight" style={{ color: earned ? '#fd297b' : 'rgba(255,255,255,0.4)', fontSize: 9 }}>{badge.name}</span>
                   {earned && <span className="text-xs" style={{ color: 'rgba(255,255,255,0.25)', fontSize: 8 }}>{badge.desc}</span>}
                 </div>
               )
@@ -294,17 +298,17 @@ export function ProfileScreen({ archetype, liked, recommendations, onRestart, us
         </div>
 
         {/* Push notifications */}
-        {user && typeof Notification !== 'undefined' && Notification.permission !== 'granted' && !pushGranted && (
+        {user && !pushGranted && (
           <div className="rounded-2xl p-4 mb-7 flex items-center gap-4"
             style={{ background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.2)' }}>
             <div className="flex-1">
               <p className="text-sm font-semibold text-white mb-0.5">Stay in the loop</p>
               <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>Get notified when you match</p>
             </div>
-            <button onClick={requestPush}
-              className="px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] flex-shrink-0"
+            <button onClick={requestPush} disabled={pushPending}
+              className="px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] flex-shrink-0 disabled:opacity-60"
               style={{ background: 'rgba(139,92,246,0.2)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.35)' }}>
-              Enable
+              {pushPending ? 'Enabling…' : 'Enable'}
             </button>
           </div>
         )}
@@ -345,7 +349,7 @@ export function ProfileScreen({ archetype, liked, recommendations, onRestart, us
         <div className="grid grid-cols-3 gap-2 mb-3">
           <button onClick={handleShare}
             className="py-3 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all duration-200 hover:scale-[1.02]"
-            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.28)', color: '#fbbf24' }}>
+            style={{ background: 'rgba(253,41,123,0.1)', border: '1px solid rgba(253,41,123,0.28)', color: '#fd297b' }}>
             <Share2 size={14} /> Share
           </button>
           <button onClick={handleCopy}

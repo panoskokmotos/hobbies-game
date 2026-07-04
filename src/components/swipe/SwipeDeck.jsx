@@ -29,7 +29,7 @@ export function SwipeDeck({
   if (exiting === 'up')    { cardTransform = 'translateY(-150vh) scale(0.92)'; cardTransition = exitTransition }
 
   const glowColor = swipeDir === 'right'
-    ? '0 0 70px rgba(251,191,36,0.45), 0 30px 80px rgba(0,0,0,0.6)'
+    ? '0 0 70px rgba(253,41,123,0.45), 0 30px 80px rgba(0,0,0,0.6)'
     : swipeDir === 'left'
     ? '0 0 70px rgba(59,130,246,0.45), 0 30px 80px rgba(0,0,0,0.6)'
     : swipeDir === 'up'
@@ -51,8 +51,8 @@ export function SwipeDeck({
         onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
       >
         <div className="absolute top-8 left-7 pointer-events-none z-10" style={{ opacity: rightOpacity, transform: 'rotate(-14deg)' }}>
-          <div className="px-4 py-1.5 rounded-xl" style={{ border: '2.5px solid #fbbf24', background: 'rgba(251,191,36,0.12)' }}>
-            <span className="font-black text-lg tracking-widest" style={{ color: '#fbbf24' }}>{rightLabel}</span>
+          <div className="px-4 py-1.5 rounded-xl" style={{ border: '2.5px solid #fd297b', background: 'rgba(253,41,123,0.12)' }}>
+            <span className="font-black text-lg tracking-widest" style={{ color: '#fd297b' }}>{rightLabel}</span>
           </div>
         </div>
         <div className="absolute top-8 right-7 pointer-events-none z-10" style={{ opacity: leftOpacity, transform: 'rotate(14deg)' }}>

@@ -38,7 +38,7 @@ export function AlienProposalScreen({ liked, archetype, scores, recommendations,
           <div className="text-6xl mb-4">✨</div>
           <h2 className="text-white text-2xl font-bold mb-3" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>Check your inbox</h2>
           <p className="text-sm leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.45)' }}>
-            Magic link sent to <span style={{ color: '#fbbf24' }}>{auth.email}</span>. Click it to jump straight in.
+            Magic link sent to <span style={{ color: '#fd297b' }}>{auth.email}</span>. Click it to jump straight in.
           </p>
           <button onClick={onSkip} className="text-xs transition-opacity hover:opacity-70" style={{ color: 'rgba(255,255,255,0.3)' }}>
             Continue without account →
@@ -57,7 +57,7 @@ export function AlienProposalScreen({ liked, archetype, scores, recommendations,
             Check your inbox
           </h2>
           <p className="text-sm leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.45)' }}>
-            We sent a confirmation link to <span style={{ color: '#fbbf24' }}>{auth.email}</span>. Click it and come back to explore.
+            We sent a confirmation link to <span style={{ color: '#fd297b' }}>{auth.email}</span>. Click it and come back to explore.
           </p>
           <button onClick={onSkip}
             className="text-xs transition-opacity hover:opacity-70"

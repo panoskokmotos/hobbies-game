@@ -112,8 +112,8 @@ export function AuthForm({
                   <button key={em} type="button" onClick={() => onSelectAvatar?.(em)}
                     className="h-10 rounded-xl text-xl flex items-center justify-center transition-all"
                     style={{
-                      background: selectedAvatar === em ? 'rgba(251,191,36,0.2)' : 'rgba(255,255,255,0.04)',
-                      border: selectedAvatar === em ? '1.5px solid rgba(251,191,36,0.6)' : '1px solid rgba(255,255,255,0.07)',
+                      background: selectedAvatar === em ? 'rgba(253,41,123,0.2)' : 'rgba(255,255,255,0.04)',
+                      border: selectedAvatar === em ? '1.5px solid rgba(253,41,123,0.6)' : '1px solid rgba(255,255,255,0.07)',
                       transform: selectedAvatar === em ? 'scale(1.1)' : 'scale(1)',
                     }}>
                     {em}
