@@ -21,25 +21,31 @@ export const signIn = async ({ email, password }) => {
   }
 }
 
-export const signInWithGoogle = async () => {
+// signInWithOAuth is synchronous and returns { url } directly — not a
+// Promise, not the { data, error } shape every other auth function returns.
+// The previous code awaited it and destructured { error }, which was always
+// undefined, and never navigated to the returned url — so clicking
+// "Continue with Google/Apple" silently did nothing. Also fixed: the params
+// shape is flat ({ provider, redirectTo }), not { provider, options: { redirectTo } }.
+const startOAuth = (provider) => {
   try {
-    return await bb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
+    const { url } = bb.auth.signInWithOAuth({ provider, redirectTo: window.location.origin })
+    if (!url) return { data: null, error: { message: `${provider} sign-in failed` } }
+    window.location.href = url
+    return { data: { url }, error: null }
   } catch (err) {
-    return { data: null, error: { message: err.message || 'Google sign-in failed' } }
+    return { data: null, error: { message: err.message || `${provider} sign-in failed` } }
   }
 }
 
-export const signInWithApple = async () => {
-  try {
-    return await bb.auth.signInWithOAuth({ provider: 'apple', options: { redirectTo: window.location.origin } })
-  } catch (err) {
-    return { data: null, error: { message: err.message || 'Apple sign-in failed' } }
-  }
-}
+export const signInWithGoogle = () => startOAuth('google')
+
+export const signInWithApple = () => startOAuth('apple')
 
 export const sendMagicLink = async ({ email }) => {
   try {
-    await bb.auth.sendMagicLink?.({ email })
+    // sendMagicLink takes the email as a plain string, not { email }.
+    await bb.auth.sendMagicLink?.(email)
     return { data: true, error: null }
   } catch (err) {
     return { data: null, error: { message: err.message || 'Could not send magic link' } }
