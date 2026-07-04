@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Download, Copy, Check, RefreshCw, Share2, Zap, LogOut } from 'lucide-react'
+import { Download, Copy, Check, RefreshCw, Share2, Zap, LogOut, ChevronLeft } from 'lucide-react'
 import { REC_SECTIONS } from '../data/fallbackRecs.js'
 import { BADGES } from '../data/badges.js'
 import { CATEGORY_COLORS } from '../data/categories.js'
@@ -97,7 +97,7 @@ function ProfileAuthCTA({ user, archetype, liked, scores, recommendations, onSav
 
 // ─── PROFILE SCREEN ───────────────────────────────────────────────────────────
 
-export function ProfileScreen({ archetype, liked, recommendations, onRestart, user, scores: scoresProp, onSaved, onGoDiscover, streak, dbProfile, onProfileUpdated, matchCount, onLogout }) {
+export function ProfileScreen({ archetype, liked, recommendations, onRestart, onBack, user, scores: scoresProp, onSaved, onGoDiscover, streak, dbProfile, onProfileUpdated, matchCount, onLogout }) {
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [editingName, setEditingName] = useState(false)
@@ -176,6 +176,13 @@ export function ProfileScreen({ archetype, liked, recommendations, onRestart, us
   return (
     <div className="min-h-screen px-4 py-10" style={{ background: BG }}>
       <div className="max-w-sm mx-auto">
+        {!user && onBack && (
+          <button onClick={onBack}
+            className="flex items-center gap-1 text-sm font-medium mb-4 transition-opacity hover:opacity-70"
+            style={{ color: text(0.4) }}>
+            <ChevronLeft size={16} /> Back
+          </button>
+        )}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest"
