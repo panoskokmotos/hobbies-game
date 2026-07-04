@@ -9,22 +9,31 @@ export function SwipeDeck({
   hasNext = false, hasThird = false,
   yDamp = 0.25, exitTransition = 'transform 0.38s cubic-bezier(0.55,0,1,0.45)',
   rightLabel = 'LOVE IT', leftLabel = 'NOT ME',
+  enableUp = false, upLabel = 'SUPER LIKE',
   children,
 }) {
   const rotation = offset.x * 0.1
-  const swipeDir = offset.x > 50 ? 'right' : offset.x < -50 ? 'left' : null
-  const rightOpacity = Math.min(1, Math.max(0, offset.x / 90))
-  const leftOpacity = Math.min(1, Math.max(0, -offset.x / 90))
+  const swipeDir = enableUp && offset.y < -50 && Math.abs(offset.y) > Math.abs(offset.x)
+    ? 'up'
+    : offset.x > 50 ? 'right' : offset.x < -50 ? 'left' : null
+  // Suppress the horizontal stamps while a drag is dominantly vertical (up),
+  // so the up-swipe stamp doesn't overlap with LOVE IT/NOT ME.
+  const rightOpacity = swipeDir === 'up' ? 0 : Math.min(1, Math.max(0, offset.x / 90))
+  const leftOpacity = swipeDir === 'up' ? 0 : Math.min(1, Math.max(0, -offset.x / 90))
+  const upOpacity = swipeDir === 'up' ? Math.min(1, Math.max(0, -offset.y / 90)) : 0
 
   let cardTransform = `translateX(${offset.x}px) translateY(${offset.y * yDamp}px) rotate(${rotation}deg)`
   let cardTransition = dragging ? 'none' : 'transform 0.45s cubic-bezier(0.34,1.56,0.64,1)'
   if (exiting === 'right') { cardTransform = 'translateX(150vw) rotate(30deg)'; cardTransition = exitTransition }
   if (exiting === 'left')  { cardTransform = 'translateX(-150vw) rotate(-30deg)'; cardTransition = exitTransition }
+  if (exiting === 'up')    { cardTransform = 'translateY(-150vh) scale(0.92)'; cardTransition = exitTransition }
 
   const glowColor = swipeDir === 'right'
     ? '0 0 70px rgba(251,191,36,0.45), 0 30px 80px rgba(0,0,0,0.6)'
     : swipeDir === 'left'
     ? '0 0 70px rgba(59,130,246,0.45), 0 30px 80px rgba(0,0,0,0.6)'
+    : swipeDir === 'up'
+    ? '0 0 70px rgba(34,211,238,0.5), 0 30px 80px rgba(0,0,0,0.6)'
     : '0 30px 80px rgba(0,0,0,0.6)'
 
   return (
@@ -51,6 +60,13 @@ export function SwipeDeck({
             <span className="font-black text-lg tracking-widest" style={{ color: '#60a5fa' }}>{leftLabel}</span>
           </div>
         </div>
+        {enableUp && (
+          <div className="absolute top-8 left-1/2 pointer-events-none z-10" style={{ opacity: upOpacity, transform: 'translateX(-50%)' }}>
+            <div className="px-4 py-1.5 rounded-xl" style={{ border: '2.5px solid #22d3ee', background: 'rgba(34,211,238,0.12)' }}>
+              <span className="font-black text-lg tracking-widest" style={{ color: '#22d3ee' }}>{upLabel}</span>
+            </div>
+          </div>
+        )}
         {children}
       </div>
     </div>

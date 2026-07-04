@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { ChevronRight, X } from 'lucide-react'
-import { getMessages, sendMessage } from '../lib/api.js'
+import { getMessages, sendMessage, markMessagesRead } from '../lib/api.js'
 import { Modal } from '../components/ui/Modal.jsx'
 
 // ─── CHAT SCREEN ──────────────────────────────────────────────────────────────
@@ -25,7 +25,10 @@ export function ChatScreen({ match, otherProfile, otherArch, myLikedCards, user,
   const loadMessages = useCallback(async () => {
     const { data } = await getMessages(match.id)
     if (mountedRef.current) setMessages(data || [])
-  }, [match.id])
+    // Mark whatever the other person sent as read now that we've viewed the
+    // chat — their client will pick this up on its next poll and show "Seen".
+    if (otherProfile?.user_id) markMessagesRead(match.id, otherProfile.user_id)
+  }, [match.id, otherProfile?.user_id])
 
   useEffect(() => {
     loadMessages()
@@ -94,14 +97,20 @@ export function ChatScreen({ match, otherProfile, otherArch, myLikedCards, user,
         )}
         {messages.map((msg, i) => {
           const mine = msg.sender_id === user.id
+          const isLastMine = mine && !messages.slice(i + 1).some(m => m.sender_id === user.id)
           return (
-            <div key={msg.id || i} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+            <div key={msg.id || i} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
               <div className="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed"
                 style={mine
                   ? { background: 'rgba(251,191,36,0.18)', color: '#fde68a', borderBottomRightRadius: 6 }
                   : { background: 'rgba(139,92,246,0.18)', color: '#c4b5fd', borderBottomLeftRadius: 6 }}>
                 {msg.content}
               </div>
+              {isLastMine && (
+                <p className="text-xs mt-1 mr-1" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                  {msg.read_at ? 'Seen' : 'Delivered'}
+                </p>
+              )}
             </div>
           )
         })}

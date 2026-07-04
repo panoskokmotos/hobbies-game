@@ -20,6 +20,16 @@ export function useSwipeSound() {
       osc.connect(gain)
       gain.connect(ctx.destination)
       osc.type = 'sine'
+      if (direction === 'up') {
+        // Brighter, longer chime — a superlike is a rarer, stronger signal.
+        osc.frequency.setValueAtTime(500, ctx.currentTime)
+        osc.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.2)
+        gain.gain.setValueAtTime(0.08, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35)
+        osc.start(ctx.currentTime)
+        osc.stop(ctx.currentTime + 0.4)
+        return
+      }
       if (direction === 'right') {
         osc.frequency.setValueAtTime(420, ctx.currentTime)
         osc.frequency.exponentialRampToValueAtTime(640, ctx.currentTime + 0.12)
