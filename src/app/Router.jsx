@@ -4,7 +4,7 @@ import { computeArchetype, computeScores, decodeProfile } from '../lib/helpers.j
 import { loadState, saveState, loadStreak, updateStreak, consumePendingQuickOnboard, hasPendingQuickOnboard } from '../lib/storage.js'
 import {
   getSession, onAuthStateChange, signOut,
-  getMyProfile, saveProfile, getMyMatches,
+  getMyProfile, saveProfile, getMyMatches, getAdmirers,
 } from '../lib/api.js'
 
 const QUICK_LIMIT = 5
@@ -18,6 +18,7 @@ import { RecommendationsScreen } from '../screens/RecommendationsScreen.jsx'
 import { MatchesScreen } from '../screens/MatchesScreen.jsx'
 import { ProfileScreen } from '../screens/ProfileScreen.jsx'
 import { DiscoverScreen } from '../screens/DiscoverScreen.jsx'
+import { LikesYouScreen } from '../screens/LikesYouScreen.jsx'
 import { MyMatchesScreen } from '../screens/MyMatchesScreen.jsx'
 import { BottomNav } from '../components/BottomNav.jsx'
 import { MatchModal } from '../components/MatchModal.jsx'
@@ -32,9 +33,10 @@ export default function Router() {
   // Auth + social state
   const [user, setUser] = useState(null)
   const [dbProfile, setDbProfile] = useState(null)
-  const [tab, setTab] = useState('profile') // 'profile' | 'discover' | 'matches'
+  const [tab, setTab] = useState('profile') // 'profile' | 'discover' | 'likes' | 'matches'
   const [matchData, setMatchData] = useState(null) // { myArchetype, theirProfile }
   const [matchCount, setMatchCount] = useState(0)
+  const [admirerCount, setAdmirerCount] = useState(0)
   const [streak, setStreak] = useState(() => loadStreak())
   const [sharedProfile, setSharedProfile] = useState(() => decodeProfile(window.location.search))
 
@@ -81,10 +83,11 @@ export default function Router() {
     return () => unsub?.unsubscribe?.()
   }, [])
 
-  // Keep match badge count fresh
+  // Keep match + admirer badge counts fresh
   useEffect(() => {
     if (!user) return
     getMyMatches(user.id).then(({ data }) => setMatchCount((data || []).length))
+    getAdmirers(user.id).then(({ data }) => setAdmirerCount((data || []).length))
   }, [user, matchData])
 
   // Check localStorage on mount; if OAuth/email-confirm just returned with a
@@ -241,13 +244,21 @@ export default function Router() {
               user={user}
               myProfile={dbProfile}
               onMatch={(theirProfile) => setMatchData({ myArchetype: archetype, theirProfile })}
+              onViewLikes={() => setTab('likes')}
+            />
+          )}
+          {tab === 'likes' && user && (
+            <LikesYouScreen
+              user={user}
+              myProfile={dbProfile}
+              onMatch={(theirProfile) => setMatchData({ myArchetype: archetype, theirProfile })}
             />
           )}
           {tab === 'matches' && user && (
             <MyMatchesScreen user={user} myProfile={dbProfile} />
           )}
           {user && (
-            <BottomNav tab={tab} onTab={setTab} matchCount={matchCount} />
+            <BottomNav tab={tab} onTab={setTab} matchCount={matchCount} admirerCount={admirerCount} />
           )}
         </>
       )}

@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, Heart } from 'lucide-react'
+import { X, Heart, Undo2 } from 'lucide-react'
 import { CARDS } from '../data/cards.js'
 import { CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS } from '../data/categories.js'
 import { ALL_ARCHETYPES } from '../data/archetypes.js'
 import { whyWeMatch } from '../lib/helpers.js'
 import {
-  getDiscoveryProfiles, getAdmirers, getProfileByUserId,
-  recordSwipe, createMatchIfMutual, updateProfile, compatibilityScore,
+  getDiscoveryProfiles, getAdmirers,
+  recordSwipe, createMatchIfMutual, undoSwipe, updateProfile, compatibilityScore,
 } from '../lib/api.js'
 import { useSwipeSound } from '../hooks/useSwipeSound.js'
 import { useSwipeDeck } from '../hooks/useSwipeDeck.js'
@@ -15,11 +15,12 @@ import { Spinner } from '../components/ui/Spinner.jsx'
 
 // ─── DISCOVER SCREEN ──────────────────────────────────────────────────────────
 
-export function DiscoverScreen({ user, myProfile, onMatch }) {
+export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
   const [profiles, setProfiles] = useState([])
   const [swipedIds, setSwipedIds] = useState(new Set())
   const [loading, setLoading] = useState(true)
-  const [admirer, setAdmirer] = useState(null)
+  const [admirerCount, setAdmirerCount] = useState(0)
+  const [lastDecision, setLastDecision] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
   const [minCompat, setMinCompat] = useState(0)
   const [categoryFilter, setCategoryFilter] = useState(new Set())
@@ -37,17 +38,11 @@ export function DiscoverScreen({ user, myProfile, onMatch }) {
     Promise.all([
       getDiscoveryProfiles(user.id),
       getAdmirers(user.id),
-    ]).then(async ([{ data: profileData }, admireIds]) => {
+    ]).then(([{ data: profileData }, { data: admirerIds }]) => {
       if (cancelled) return
-      const regular = profileData || []
-      setProfiles(regular)
-      const deckIds = new Set(regular.map(p => p.user_id))
-      const freshAdmirerId = admireIds.find(id => !deckIds.has(id))
-      if (freshAdmirerId) {
-        const { data: ap } = await getProfileByUserId(freshAdmirerId)
-        if (!cancelled) setAdmirer({ userId: freshAdmirerId, profile: ap?.[0] || null })
-      }
-      if (!cancelled) setLoading(false)
+      setProfiles(profileData || [])
+      setAdmirerCount((admirerIds || []).length)
+      setLoading(false)
     })
     return () => { cancelled = true }
   }, [user.id])
@@ -77,14 +72,31 @@ export function DiscoverScreen({ user, myProfile, onMatch }) {
       const profile = currentProfile
       if (!profile) return
       await recordSwipe(user.id, profile.user_id, direction === 'right' ? 'like' : 'pass')
+      let matched = false
       if (direction === 'right') {
-        const { matched } = await createMatchIfMutual(user.id, profile.user_id)
+        const result = await createMatchIfMutual(user.id, profile.user_id)
+        matched = result.matched
         if (matched) onMatch?.(profile)
       }
-      if (admirer?.userId === profile.user_id) setAdmirer(null)
       setSwipedIds(prev => new Set([...prev, profile.user_id]))
+      // Rewind is only offered for swipes that didn't just create a match —
+      // once the match celebration has fired, undoing it would be confusing
+      // (mirrors real Tinder's rewind limitations).
+      setLastDecision(matched ? null : { profile, direction })
     },
   })
+
+  const handleUndo = async () => {
+    if (!lastDecision) return
+    const { profile } = lastDecision
+    setLastDecision(null)
+    await undoSwipe(user.id, profile.user_id)
+    setSwipedIds(prev => {
+      const next = new Set(prev)
+      next.delete(profile.user_id)
+      return next
+    })
+  }
 
   const toggleCategory = (cat) => {
     setCategoryFilter(prev => {
@@ -249,17 +261,18 @@ export function DiscoverScreen({ user, myProfile, onMatch }) {
           </div>
         )}
 
-        {admirer && (
-          <div className="mt-2 flex items-center gap-2.5 px-3 py-2 rounded-xl"
+        {admirerCount > 0 && (
+          <button onClick={onViewLikes}
+            className="mt-2 w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-opacity hover:opacity-85"
             style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)' }}>
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0"
               style={{ background: 'rgba(139,92,246,0.2)' }}>
-              👤
+              💜
             </div>
             <p className="text-xs leading-tight flex-1" style={{ color: 'rgba(255,255,255,0.6)' }}>
-              <span style={{ color: '#a78bfa', fontWeight: 600 }}>Someone</span> already likes your profile — keep swiping to find them
+              <span style={{ color: '#a78bfa', fontWeight: 600 }}>{admirerCount} {admirerCount === 1 ? 'person' : 'people'}</span> already {admirerCount === 1 ? 'likes' : 'like'} you — see who →
             </p>
-          </div>
+          </button>
         )}
       </div>
 
@@ -332,7 +345,12 @@ export function DiscoverScreen({ user, myProfile, onMatch }) {
         </p>
       </SwipeDeck>
 
-      <div className="flex gap-10 mt-8">
+      <div className="flex items-center gap-6 mt-8">
+        <button onClick={handleUndo} disabled={!lastDecision}
+          className="w-11 h-11 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 disabled:opacity-25 disabled:hover:scale-100"
+          style={{ background: 'rgba(255,255,255,0.05)', border: '1.5px solid rgba(255,255,255,0.15)' }}>
+          <Undo2 size={18} color="rgba(255,255,255,0.6)" />
+        </button>
         <button onClick={() => decide('left')}
           className="w-16 h-16 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
           style={{ background: 'rgba(96,165,250,0.12)', border: '1.5px solid rgba(96,165,250,0.35)' }}>

@@ -135,6 +135,14 @@ export const recordSwipe = async (swiperId, swipedId, direction) => {
   }
 }
 
+export const undoSwipe = async (swiperId, swipedId) => {
+  try {
+    return await bb.from('swipes').delete().eq('swiper_id', swiperId).eq('swiped_id', swipedId)
+  } catch (err) {
+    return { error: { message: err.message || 'Could not undo swipe' } }
+  }
+}
+
 const checkMutualLike = async (myUserId, theirUserId) => {
   const { data, error } = await bb.from('swipes')
     .select('direction')
@@ -168,6 +176,14 @@ export const createMatchIfMutual = async (myUserId, theirUserId) => {
     return { data: result.data, matched: true, error: result.error }
   } catch (err) {
     return { data: null, matched: false, error: { message: err.message || 'Could not create match' } }
+  }
+}
+
+export const undoMatch = async (matchId) => {
+  try {
+    return await bb.from('matches').delete().eq('id', matchId)
+  } catch (err) {
+    return { error: { message: err.message || 'Could not undo match' } }
   }
 }
 
@@ -217,6 +233,20 @@ export const getAdmirers = async (myUserId) => {
     return { data: (data || []).filter(s => !seen.has(s.swiper_id)).map(s => s.swiper_id), error: null }
   } catch (err) {
     return { data: [], error: { message: err.message || 'Could not load admirers' } }
+  }
+}
+
+export const getAdmirerProfiles = async (myUserId) => {
+  try {
+    const { data: admirerIds, error } = await getAdmirers(myUserId)
+    if (error) return { data: [], error }
+    const profiles = await Promise.all(admirerIds.map(async (id) => {
+      const { data } = await getProfileByUserId(id)
+      return data?.[0] || null
+    }))
+    return { data: profiles.filter(Boolean), error: null }
+  } catch (err) {
+    return { data: [], error: { message: err.message || 'Could not load admirer profiles' } }
   }
 }
 
