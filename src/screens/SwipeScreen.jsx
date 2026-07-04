@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Heart, X } from 'lucide-react'
+import { Heart, X, Undo2 } from 'lucide-react'
 import { CARDS } from '../data/cards.js'
 import { CATEGORY_LABELS, CATEGORY_COLORS } from '../data/categories.js'
 import { useSwipeSound } from '../hooks/useSwipeSound.js'
@@ -15,10 +15,14 @@ export function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initi
   const [liked, setLiked] = useState(initialLiked)
   const [streakMsg, setStreakMsg] = useState(null)
   const [showTutorial, setShowTutorial] = useState(() => startIndex === 0 && !localStorage.getItem('polymath_swiped'))
+  const [canUndo, setCanUndo] = useState(false)
 
   const indexRef = useRef(startIndex)
   const likedRef = useRef(initialLiked)
   const consecutiveRight = useRef(0)
+  // Single-level rewind snapshot (Tinder's free-tier "one rewind," not unlimited) —
+  // pure client state here, no backend involved for the onboarding deck.
+  const lastDecisionRef = useRef(null)
   const playSwipe = useSwipeSound()
 
   const handleDecide = useCallback((direction) => {
@@ -29,6 +33,13 @@ export function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initi
   }, [playSwipe])
 
   const handleDecideComplete = useCallback((direction) => {
+    lastDecisionRef.current = {
+      index: indexRef.current,
+      liked: likedRef.current,
+      consecutiveRight: consecutiveRight.current,
+    }
+    setCanUndo(true)
+
     const currentCard = CARDS[indexRef.current]
     const currentLiked = likedRef.current
     const newLiked = direction === 'right' ? [...currentLiked, currentCard] : [...currentLiked]
@@ -63,6 +74,19 @@ export function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initi
     onDecide: handleDecide,
     onDecideComplete: handleDecideComplete,
   })
+
+  const handleUndo = useCallback(() => {
+    const snapshot = lastDecisionRef.current
+    if (!snapshot) return
+    indexRef.current = snapshot.index
+    likedRef.current = snapshot.liked
+    consecutiveRight.current = snapshot.consecutiveRight
+    setIndex(snapshot.index)
+    setLiked(snapshot.liked)
+    setStreakMsg(null)
+    lastDecisionRef.current = null
+    setCanUndo(false)
+  }, [])
 
   useEffect(() => {
     if (showTutorial) {
@@ -162,7 +186,12 @@ export function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initi
         </div>
       )}
 
-      <div className="flex gap-10 mt-6">
+      <div className="flex items-center gap-6 mt-6">
+        <button onClick={handleUndo} disabled={!canUndo}
+          className="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 disabled:opacity-25 disabled:hover:scale-100"
+          style={{ background: 'rgba(255,255,255,0.05)', border: '1.5px solid rgba(255,255,255,0.15)' }}>
+          <Undo2 size={18} color="rgba(255,255,255,0.6)" />
+        </button>
         <button onClick={() => decide('left')}
           className="w-16 h-16 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
           style={{ background: 'rgba(96,165,250,0.12)', border: '1.5px solid rgba(96,165,250,0.35)' }}>

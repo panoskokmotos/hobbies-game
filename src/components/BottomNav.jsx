@@ -1,11 +1,12 @@
-import { User, Compass, MessageCircle } from 'lucide-react'
+import { User, Compass, Heart, MessageCircle } from 'lucide-react'
 
 // ─── BOTTOM NAV ───────────────────────────────────────────────────────────────
 
-export function BottomNav({ tab, onTab, matchCount = 0 }) {
+export function BottomNav({ tab, onTab, matchCount = 0, admirerCount = 0 }) {
   const tabs = [
     { id: 'profile',  label: 'Profile',  icon: User },
     { id: 'discover', label: 'Discover', icon: Compass },
+    { id: 'likes',    label: 'Likes',    icon: Heart, badge: admirerCount },
     { id: 'matches',  label: 'Matches',  icon: MessageCircle, badge: matchCount },
   ]
   return (
