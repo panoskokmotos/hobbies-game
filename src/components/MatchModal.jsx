@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Modal } from './ui/Modal.jsx'
+import { TEXT, text } from '../lib/theme.js'
 
 // ─── MATCH MODAL ──────────────────────────────────────────────────────────────
 
@@ -18,7 +19,7 @@ export function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, o
     <Modal variant="center" phase={phase} glow>
       <div className="text-5xl mb-4">💜</div>
       <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#8b5cf6' }}>It's a match</p>
-      <h1 className="text-white text-3xl font-bold mb-3 leading-tight" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>
+      <h1 className="text-3xl font-bold mb-3 leading-tight" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: TEXT }}>
         You and {theirProfile?.display_name || 'someone'} clicked
       </h1>
 
@@ -35,7 +36,7 @@ export function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, o
           </div>
         </div>
       ) : (
-        <p className="text-sm mb-6 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+        <p className="text-sm mb-6 leading-relaxed" style={{ color: text(0.45) }}>
           Two curious minds found each other. Start a conversation.
         </p>
       )}
@@ -46,7 +47,7 @@ export function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, o
             style={{ background: 'rgba(253,41,123,0.12)', border: '2px solid rgba(253,41,123,0.3)' }}>
             {myArchetype?.emoji}
           </div>
-          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>You</span>
+          <span className="text-xs" style={{ color: text(0.4) }}>You</span>
         </div>
         <div className="self-center text-2xl">✦</div>
         <div className="flex flex-col items-center gap-2">
@@ -54,7 +55,7 @@ export function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, o
             style={{ background: 'rgba(139,92,246,0.12)', border: '2px solid rgba(139,92,246,0.3)' }}>
             {theirProfile?.avatar_emoji || '👤'}
           </div>
-          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>{theirProfile?.display_name || 'Them'}</span>
+          <span className="text-xs" style={{ color: text(0.4) }}>{theirProfile?.display_name || 'Them'}</span>
         </div>
       </div>
 
@@ -71,7 +72,7 @@ export function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, o
       </button>
       <button onClick={onClose}
         className="w-full py-2.5 rounded-xl text-sm transition-opacity hover:opacity-70"
-        style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.08)' }}>
+        style={{ color: text(0.3), border: `1px solid ${text(0.08)}` }}>
         Keep discovering
       </button>
     </Modal>

@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react'
 import { REC_SECTIONS } from '../data/fallbackRecs.js'
 import { getRecommendations } from '../lib/api.js'
 import { Spinner } from '../components/ui/Spinner.jsx'
+import { BG, TEXT, text } from '../lib/theme.js'
 
 // ─── RECOMMENDATIONS SCREEN ───────────────────────────────────────────────────
 
@@ -30,14 +31,14 @@ export function RecommendationsScreen({ liked, onNext }) {
   }, [liked])
 
   return (
-    <div className="min-h-screen px-4 py-10" style={{ background: '#0a0a0f' }}>
+    <div className="min-h-screen px-4 py-10" style={{ background: BG }}>
       <div className="max-w-sm mx-auto">
         <div className="text-center mb-8">
           <div className="text-4xl mb-3">✨</div>
-          <h1 className="text-white mb-1" style={{ fontFamily: 'Fraunces, serif', fontWeight: 800, fontSize: 30, letterSpacing: '-0.03em' }}>
+          <h1 className="mb-1" style={{ fontFamily: 'Fraunces, serif', fontWeight: 800, fontSize: 30, letterSpacing: '-0.03em', color: TEXT }}>
             Your Expansion Map
           </h1>
-          <p className="text-sm" style={{ color: 'rgba(255,255,255,0.35)' }}>
+          <p className="text-sm" style={{ color: text(0.35) }}>
             {usingFallback ? 'Curated for your interests' : 'AI-curated for your profile'}
           </p>
         </div>
@@ -45,7 +46,7 @@ export function RecommendationsScreen({ liked, onNext }) {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-5">
             <Spinner size={56} double />
-            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>Reading your cosmic profile…</p>
+            <p className="text-sm" style={{ color: text(0.4) }}>Reading your cosmic profile…</p>
           </div>
         ) : (
           <div style={{ opacity: phase ? 1 : 0, transform: phase ? 'translateY(0)' : 'translateY(16px)', transition: 'opacity 0.6s ease, transform 0.6s cubic-bezier(0.16,1,0.3,1)' }}>
@@ -55,7 +56,7 @@ export function RecommendationsScreen({ liked, onNext }) {
                   <div className="h-px flex-1" style={{ background: `${section.color}30` }} />
                   <div className="text-center">
                     <span className="font-bold text-lg" style={{ fontFamily: 'Fraunces, serif', color: section.color, letterSpacing: '-0.02em' }}>{section.title}</span>
-                    <p className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{section.subtitle}</p>
+                    <p className="text-xs" style={{ color: text(0.3) }}>{section.subtitle}</p>
                   </div>
                   <div className="h-px flex-1" style={{ background: `${section.color}30` }} />
                 </div>
@@ -65,8 +66,8 @@ export function RecommendationsScreen({ liked, onNext }) {
                       style={{ background: `${section.color}09`, border: `1px solid ${section.color}20`, opacity: phase ? 1 : 0, transform: phase ? 'none' : 'translateY(8px)', transition: `opacity 0.5s ${(si * 3 + i) * 60}ms, transform 0.5s ${(si * 3 + i) * 60}ms` }}>
                       <span className="text-2xl leading-none mt-0.5">{item.emoji}</span>
                       <div>
-                        <p className="text-white font-semibold text-sm leading-tight">{item.title}</p>
-                        <p className="text-xs mt-1 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>{item.reason}</p>
+                        <p className="font-semibold text-sm leading-tight" style={{ color: TEXT }}>{item.title}</p>
+                        <p className="text-xs mt-1 leading-relaxed" style={{ color: text(0.45) }}>{item.reason}</p>
                       </div>
                     </div>
                   ))}

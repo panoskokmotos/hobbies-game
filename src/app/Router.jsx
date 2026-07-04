@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { CARDS } from '../data/cards.js'
 import { computeArchetype, computeScores, decodeProfile } from '../lib/helpers.js'
 import { loadState, saveState, loadStreak, updateStreak, consumePendingQuickOnboard, hasPendingQuickOnboard } from '../lib/storage.js'
+import { BG } from '../lib/theme.js'
 import {
   getSession, onAuthStateChange, signOut,
   getMyProfile, saveProfile, getMyMatches, getAdmirers,
@@ -189,7 +190,7 @@ export default function Router() {
   const lockedTabs = isFullyOnboarded ? [] : ['profile', 'discover', 'likes', 'matches'].filter(id => id !== effectiveTab)
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0f', paddingBottom: showNav ? 72 : 0 }}>
+    <div style={{ minHeight: '100vh', background: BG, paddingBottom: showNav ? 72 : 0 }}>
       {screen === 'shared' && sharedProfile && (
         <SharedProfileScreen shared={sharedProfile} onContinue={handleSharedContinue} />
       )}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { CATEGORY_COLORS } from '../data/categories.js'
+import { BG, TEXT, text } from '../lib/theme.js'
 
 // ─── RETURNING USER SCREEN ────────────────────────────────────────────────────
 
@@ -13,7 +14,7 @@ export function ReturningUserScreen({ saved, onContinue, onRestart }) {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6"
-      style={{ background: '#0a0a0f' }}>
+      style={{ background: BG }}>
       <div className="w-full max-w-xs text-center"
         style={{
           opacity: phase ? 1 : 0,
@@ -24,11 +25,11 @@ export function ReturningUserScreen({ saved, onContinue, onRestart }) {
         <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#fd297b' }}>
           Welcome back
         </p>
-        <h1 className="text-white text-3xl font-bold mb-2 leading-tight"
-          style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>
+        <h1 className="text-3xl font-bold mb-2 leading-tight"
+          style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: TEXT }}>
           {saved.archetype.name}
         </h1>
-        <p className="text-sm mb-8 leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
+        <p className="text-sm mb-8 leading-relaxed" style={{ color: text(0.4) }}>
           You've already discovered your archetype. Pick up where you left off?
         </p>
 
@@ -44,7 +45,7 @@ export function ReturningUserScreen({ saved, onContinue, onRestart }) {
             </span>
           ))}
           {saved.liked.length > 8 && (
-            <span className="px-3 py-1.5 rounded-full text-sm" style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <span className="px-3 py-1.5 rounded-full text-sm" style={{ color: text(0.3), border: `1px solid ${text(0.1)}` }}>
               +{saved.liked.length - 8} more
             </span>
           )}
@@ -57,7 +58,7 @@ export function ReturningUserScreen({ saved, onContinue, onRestart }) {
         </button>
         <button onClick={onRestart}
           className="w-full py-3 rounded-xl text-sm font-medium transition-opacity hover:opacity-70"
-          style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          style={{ color: text(0.3), border: `1px solid ${text(0.08)}` }}>
           <RefreshCw size={13} className="inline mr-1.5" />
           Start fresh
         </button>

@@ -5,6 +5,7 @@ import { getMyMatches, getProfileByUserId, compatibilityScore } from '../lib/api
 import { timeAgo } from '../lib/helpers.js'
 import { Spinner } from '../components/ui/Spinner.jsx'
 import { ChatScreen } from './ChatScreen.jsx'
+import { BG, TEXT, text } from '../lib/theme.js'
 
 // ─── MY MATCHES SCREEN ────────────────────────────────────────────────────────
 
@@ -36,21 +37,21 @@ export function MyMatchesScreen({ user, myProfile }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0a0f', paddingBottom: 80 }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: BG, paddingBottom: 80 }}>
         <Spinner size={48} color="#a78bfa" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen px-4 py-10" style={{ background: '#0a0a0f', paddingBottom: 100 }}>
+    <div className="min-h-screen px-4 py-10" style={{ background: BG, paddingBottom: 100 }}>
       <div className="max-w-sm mx-auto">
         <div className="text-center mb-8">
           <div className="text-4xl mb-3">💜</div>
-          <h1 className="text-white mb-1" style={{ fontFamily: 'Fraunces, serif', fontWeight: 800, fontSize: 30, letterSpacing: '-0.03em' }}>
+          <h1 className="mb-1" style={{ fontFamily: 'Fraunces, serif', fontWeight: 800, fontSize: 30, letterSpacing: '-0.03em', color: TEXT }}>
             My Matches
           </h1>
-          <p className="text-sm" style={{ color: 'rgba(255,255,255,0.35)' }}>
+          <p className="text-sm" style={{ color: text(0.35) }}>
             {matches.length === 0 ? 'No matches yet — keep discovering' : `${matches.length} connection${matches.length !== 1 ? 's' : ''}`}
           </p>
         </div>
@@ -58,7 +59,7 @@ export function MyMatchesScreen({ user, myProfile }) {
         {matches.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-6xl mb-4">🌌</div>
-            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            <p className="text-sm" style={{ color: text(0.3) }}>
               Your first match is out there.<br />Head to Discover and find them.
             </p>
           </div>
@@ -79,14 +80,14 @@ export function MyMatchesScreen({ user, myProfile }) {
                   })
                 }}
                   className="w-full rounded-2xl p-4 flex items-center gap-4 text-left transition-all hover:scale-[1.01] active:scale-[0.99]"
-                  style={{ background: 'linear-gradient(145deg,#1a1428,#141428)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                  style={{ background: 'linear-gradient(145deg,rgba(139,92,246,0.07),rgba(139,92,246,0.03))', border: '1px solid rgba(139,92,246,0.2)' }}>
                   <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0"
                     style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)' }}>
                     {other?.avatar_emoji || otherArch?.emoji || '👤'}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white font-semibold text-sm truncate">{other?.display_name || 'Anonymous'}</p>
-                    <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                    <p className="font-semibold text-sm truncate" style={{ color: TEXT }}>{other?.display_name || 'Anonymous'}</p>
+                    <p className="text-xs truncate" style={{ color: text(0.4) }}>
                       {otherArch?.name || 'Explorer'}{compat > 0 ? ` · ${compat}% match` : ''}
                     </p>
                   </div>
@@ -100,7 +101,7 @@ export function MyMatchesScreen({ user, myProfile }) {
                         Message →
                       </span>
                     </div>
-                    <span className="text-xs" style={{ color: 'rgba(255,255,255,0.22)' }}>
+                    <span className="text-xs" style={{ color: text(0.22) }}>
                       {match.created_at ? timeAgo(match.created_at) : ''}
                     </span>
                   </div>

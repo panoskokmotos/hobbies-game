@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { SEED_PROFILES } from '../data/seedProfiles.js'
+import { BG, TEXT, text } from '../lib/theme.js'
 
 // ─── MATCHES SCREEN ───────────────────────────────────────────────────────────
 
@@ -12,34 +13,34 @@ export function MatchesScreen({ onNext }) {
   }, [])
 
   return (
-    <div className="min-h-screen px-4 py-10" style={{ background: '#0a0a0f' }}>
+    <div className="min-h-screen px-4 py-10" style={{ background: BG }}>
       <div className="max-w-sm mx-auto">
         <div className="text-center mb-8">
           <div className="text-4xl mb-3">🌐</div>
-          <h1 className="text-white mb-1" style={{ fontFamily: 'Fraunces, serif', fontWeight: 800, fontSize: 30, letterSpacing: '-0.03em' }}>Your Tribe</h1>
-          <p className="text-sm" style={{ color: 'rgba(255,255,255,0.35)' }}>People whose curiosity interlocks with yours</p>
+          <h1 className="mb-1" style={{ fontFamily: 'Fraunces, serif', fontWeight: 800, fontSize: 30, letterSpacing: '-0.03em', color: TEXT }}>Your Tribe</h1>
+          <p className="text-sm" style={{ color: text(0.35) }}>People whose curiosity interlocks with yours</p>
         </div>
         <div className="space-y-4 mb-7">
           {SEED_PROFILES.map((profile, i) => (
             <div key={i} className="rounded-3xl p-5"
-              style={{ background: 'linear-gradient(145deg,#1a1a2e,#141428)', border: '1px solid rgba(255,255,255,0.07)', opacity: phase ? 1 : 0, transform: phase ? 'translateY(0)' : 'translateY(20px)', transition: `opacity 0.6s ${i * 120}ms, transform 0.6s cubic-bezier(0.16,1,0.3,1) ${i * 120}ms` }}>
+              style={{ background: 'linear-gradient(145deg,rgba(139,92,246,0.06),rgba(139,92,246,0.02))', border: `1px solid ${text(0.07)}`, opacity: phase ? 1 : 0, transform: phase ? 'translateY(0)' : 'translateY(20px)', transition: `opacity 0.6s ${i * 120}ms, transform 0.6s cubic-bezier(0.16,1,0.3,1) ${i * 120}ms` }}>
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-11 h-11 rounded-full flex items-center justify-center text-xl flex-shrink-0"
                   style={{ background: `${profile.color}15`, border: `1px solid ${profile.color}30` }}>
                   {profile.avatar}
                 </div>
                 <div>
-                  <p className="text-white font-semibold text-sm">{profile.name}</p>
-                  <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>{profile.archetype}</p>
+                  <p className="font-semibold text-sm" style={{ color: TEXT }}>{profile.name}</p>
+                  <p className="text-xs" style={{ color: text(0.4) }}>{profile.archetype}</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {profile.interests.map((int, j) => (
                   <span key={j} className="px-2.5 py-1 rounded-full text-xs"
-                    style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.55)' }}>{int}</span>
+                    style={{ background: text(0.05), color: text(0.55) }}>{int}</span>
                 ))}
               </div>
-              <p className="text-xs italic mb-4 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>"{profile.why}"</p>
+              <p className="text-xs italic mb-4 leading-relaxed" style={{ color: text(0.45) }}>"{profile.why}"</p>
               <button className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 hover:opacity-80"
                 style={{ background: `${profile.color}12`, color: profile.color, border: `1px solid ${profile.color}30` }}>
                 Connect — coming soon
