@@ -10,14 +10,14 @@
 }
 
 body {
-  background: #0a0a0f;
+  background: #faf9fb;
   overscroll-behavior: none;
   font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
 ::selection {
-  background: rgba(251, 191, 36, 0.3);
-  color: white;
+  background: rgba(253, 41, 123, 0.2);
+  color: #14121c;
 }
 
 ::-webkit-scrollbar {

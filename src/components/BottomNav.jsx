@@ -1,4 +1,5 @@
 import { User, Compass, Heart, MessageCircle, Lock } from 'lucide-react'
+import { BG_TRANSLUCENT, text } from '../lib/theme.js'
 
 // ─── BOTTOM NAV ───────────────────────────────────────────────────────────────
 // Rendered globally from the very first screen (not just once signed in), so
@@ -15,7 +16,7 @@ export function BottomNav({ tab, onTab, matchCount = 0, admirerCount = 0, locked
   ]
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50"
-      style={{ background: 'rgba(10,10,15,0.95)', borderTop: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(16px)' }}>
+      style={{ background: BG_TRANSLUCENT, borderTop: `1px solid ${text(0.08)}`, backdropFilter: 'blur(16px)' }}>
       <div className="flex max-w-sm mx-auto">
         {tabs.map(({ id, label, icon: Icon, badge }) => {
           const active = tab === id
@@ -23,7 +24,7 @@ export function BottomNav({ tab, onTab, matchCount = 0, admirerCount = 0, locked
           return (
             <button key={id} onClick={() => !locked && onTab(id)}
               className="flex-1 py-3 flex flex-col items-center gap-1 transition-all duration-150"
-              style={{ color: active ? '#fd297b' : locked ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.3)', cursor: locked ? 'default' : 'pointer' }}>
+              style={{ color: active ? '#fd297b' : locked ? text(0.2) : text(0.4), cursor: locked ? 'default' : 'pointer' }}>
               <div className="relative">
                 {locked ? <Lock size={16} /> : <Icon size={20} />}
                 {!locked && badge > 0 && (

@@ -2,6 +2,8 @@
 // LOVE IT/NOT ME (or CONNECT/PASS) corner stamps. Consolidates the visual
 // mechanics that used to be duplicated between SwipeScreen and DiscoverScreen;
 // each screen supplies its own card content via `children`/`nextCard`.
+import { text } from '../../lib/theme.js'
+
 export function SwipeDeck({
   width = 320, height = 460,
   offset, dragging, exiting,
@@ -29,24 +31,24 @@ export function SwipeDeck({
   if (exiting === 'up')    { cardTransform = 'translateY(-150vh) scale(0.92)'; cardTransition = exitTransition }
 
   const glowColor = swipeDir === 'right'
-    ? '0 0 70px rgba(253,41,123,0.45), 0 30px 80px rgba(0,0,0,0.6)'
+    ? '0 0 70px rgba(253,41,123,0.35), 0 20px 60px rgba(0,0,0,0.12)'
     : swipeDir === 'left'
-    ? '0 0 70px rgba(59,130,246,0.45), 0 30px 80px rgba(0,0,0,0.6)'
+    ? '0 0 70px rgba(59,130,246,0.35), 0 20px 60px rgba(0,0,0,0.12)'
     : swipeDir === 'up'
-    ? '0 0 70px rgba(34,211,238,0.5), 0 30px 80px rgba(0,0,0,0.6)'
-    : '0 30px 80px rgba(0,0,0,0.6)'
+    ? '0 0 70px rgba(34,211,238,0.4), 0 20px 60px rgba(0,0,0,0.12)'
+    : '0 20px 60px rgba(0,0,0,0.12)'
 
   return (
     <div className="relative" style={{ width, height }}>
       {hasThird && (
-        <div className="absolute inset-0 rounded-3xl" style={{ background: 'linear-gradient(145deg,#141428,#0e1020)', transform: 'scale(0.86) translateY(28px)', border: '1px solid rgba(255,255,255,0.04)' }} />
+        <div className="absolute inset-0 rounded-3xl" style={{ background: 'linear-gradient(145deg,#f2f1f5,#eae8ef)', transform: 'scale(0.86) translateY(28px)', border: `1px solid ${text(0.06)}` }} />
       )}
       {hasNext && (
-        <div className="absolute inset-0 rounded-3xl" style={{ background: 'linear-gradient(145deg,#181830,#141428)', transform: 'scale(0.93) translateY(16px)', border: '1px solid rgba(255,255,255,0.05)' }} />
+        <div className="absolute inset-0 rounded-3xl" style={{ background: 'linear-gradient(145deg,#f8f7fa,#f0eef4)', transform: 'scale(0.93) translateY(16px)', border: `1px solid ${text(0.07)}` }} />
       )}
       <div
         className="absolute inset-0 rounded-3xl flex flex-col cursor-grab active:cursor-grabbing overflow-hidden"
-        style={{ background: 'linear-gradient(145deg,#1c1c34,#161628)', border: '1px solid rgba(255,255,255,0.1)', transform: cardTransform, transition: cardTransition, boxShadow: glowColor, touchAction: 'none' }}
+        style={{ background: 'linear-gradient(145deg,#ffffff,#f8f7fb)', border: `1px solid ${text(0.1)}`, transform: cardTransform, transition: cardTransition, boxShadow: glowColor, touchAction: 'none' }}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove}
         onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
       >

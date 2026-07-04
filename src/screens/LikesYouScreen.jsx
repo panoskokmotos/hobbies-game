@@ -5,6 +5,7 @@ import { CATEGORY_COLORS } from '../data/categories.js'
 import { ALL_ARCHETYPES } from '../data/archetypes.js'
 import { getAdmirerProfiles, recordSwipe, createMatchIfMutual, compatibilityScore } from '../lib/api.js'
 import { Spinner } from '../components/ui/Spinner.jsx'
+import { BG, TEXT, text } from '../lib/theme.js'
 
 // ─── LIKES YOU SCREEN ─────────────────────────────────────────────────────────
 // Tinder Gold's core hook, minus the paywall (this app has no premium tier, so
@@ -40,21 +41,21 @@ export function LikesYouScreen({ user, myProfile, onMatch }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0a0f', paddingBottom: 80 }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: BG, paddingBottom: 80 }}>
         <Spinner size={48} />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen px-4 py-10" style={{ background: '#0a0a0f', paddingBottom: 100 }}>
+    <div className="min-h-screen px-4 py-10" style={{ background: BG, paddingBottom: 100 }}>
       <div className="max-w-sm mx-auto">
         <div className="text-center mb-8">
           <div className="text-4xl mb-3">💜</div>
-          <h1 className="text-white mb-1" style={{ fontFamily: 'Fraunces, serif', fontWeight: 800, fontSize: 30, letterSpacing: '-0.03em' }}>
+          <h1 className="mb-1" style={{ fontFamily: 'Fraunces, serif', fontWeight: 800, fontSize: 30, letterSpacing: '-0.03em', color: TEXT }}>
             Likes You
           </h1>
-          <p className="text-sm" style={{ color: 'rgba(255,255,255,0.35)' }}>
+          <p className="text-sm" style={{ color: text(0.35) }}>
             {admirers.length === 0 ? 'No one yet — keep exploring' : `${admirers.length} ${admirers.length === 1 ? 'person likes' : 'people like'} you`}
           </p>
         </div>
@@ -62,7 +63,7 @@ export function LikesYouScreen({ user, myProfile, onMatch }) {
         {admirers.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-6xl mb-4">🌌</div>
-            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            <p className="text-sm" style={{ color: text(0.3) }}>
               Your admirers will show up here.<br />Head to Discover to be seen.
             </p>
           </div>
@@ -77,13 +78,13 @@ export function LikesYouScreen({ user, myProfile, onMatch }) {
 
               return (
                 <div key={profile.user_id} className="rounded-2xl p-3.5 flex flex-col items-center text-center"
-                  style={{ background: 'linear-gradient(145deg,#1a1428,#141428)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                  style={{ background: 'linear-gradient(145deg,rgba(139,92,246,0.07),rgba(139,92,246,0.03))', border: '1px solid rgba(139,92,246,0.2)' }}>
                   <div className="w-14 h-14 rounded-full flex items-center justify-center text-2xl mb-2"
                     style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)' }}>
                     {profile.avatar_emoji || archName?.emoji || '👤'}
                   </div>
-                  <p className="text-white font-semibold text-sm truncate w-full">{profile.display_name || 'Anonymous'}</p>
-                  <p className="text-xs mb-1.5 truncate w-full" style={{ color: 'rgba(255,255,255,0.4)' }}>{archName?.name || 'Explorer'}</p>
+                  <p className="font-semibold text-sm truncate w-full" style={{ color: TEXT }}>{profile.display_name || 'Anonymous'}</p>
+                  <p className="text-xs mb-1.5 truncate w-full" style={{ color: text(0.4) }}>{archName?.name || 'Explorer'}</p>
                   {compat > 0 && (
                     <p className="text-xs font-bold mb-1.5" style={{ color: '#8b5cf6' }}>{compat}% compatible</p>
                   )}

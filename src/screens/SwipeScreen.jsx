@@ -5,6 +5,7 @@ import { CATEGORY_LABELS, CATEGORY_COLORS } from '../data/categories.js'
 import { useSwipeSound } from '../hooks/useSwipeSound.js'
 import { useSwipeDeck } from '../hooks/useSwipeDeck.js'
 import { SwipeDeck } from '../components/swipe/SwipeDeck.jsx'
+import { BG, TEXT, text } from '../lib/theme.js'
 
 const QUICK_LIMIT = 5
 
@@ -117,16 +118,16 @@ export function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initi
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center select-none"
-      style={{ background: '#0a0a0f', paddingBottom: 32 }}>
+      style={{ background: BG, paddingBottom: 32 }}>
 
       <div className="w-full max-w-xs px-6 mb-6">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-white font-bold text-xl" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
+          <span className="font-bold text-xl" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em', color: TEXT }}>
             polymath
           </span>
-          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{index - startIndex}/{total}</span>
+          <span className="text-xs" style={{ color: text(0.3) }}>{index - startIndex}/{total}</span>
         </div>
-        <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+        <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: text(0.08) }}>
           <div className="h-full rounded-full transition-all duration-300"
             style={{ width: `${((index - startIndex) / total) * 100}%`, background: 'linear-gradient(90deg,#ff655b,#fd297b)' }} />
         </div>
@@ -152,11 +153,11 @@ export function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initi
             </span>
           </div>
           <div className="text-[88px] leading-none mb-5 pointer-events-none">{card.emoji}</div>
-          <h2 className="text-white text-3xl font-bold text-center px-6 leading-tight pointer-events-none"
-            style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>
+          <h2 className="text-3xl font-bold text-center px-6 leading-tight pointer-events-none"
+            style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em', color: TEXT }}>
             {card.label}
           </h2>
-          <p className="mt-8 text-xs pointer-events-none" style={{ color: 'rgba(255,255,255,0.2)' }}>
+          <p className="mt-8 text-xs pointer-events-none" style={{ color: text(0.2) }}>
             ← drag · arrow keys →
           </p>
         </div>
@@ -193,8 +194,8 @@ export function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initi
       <div className="flex items-center gap-6 mt-6">
         <button onClick={handleUndo} disabled={!canUndo}
           className="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 disabled:opacity-25 disabled:hover:scale-100"
-          style={{ background: 'rgba(255,255,255,0.05)', border: '1.5px solid rgba(255,255,255,0.15)' }}>
-          <Undo2 size={18} color="rgba(255,255,255,0.6)" />
+          style={{ background: text(0.05), border: `1.5px solid ${text(0.15)}` }}>
+          <Undo2 size={18} color={text(0.6)} />
         </button>
         <button onClick={() => decide('left')}
           className="w-16 h-16 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
@@ -211,7 +212,7 @@ export function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initi
       {canExitEarly && (
         <button onClick={() => onComplete(liked)}
           className="mt-5 text-xs transition-opacity hover:opacity-70"
-          style={{ color: 'rgba(255,255,255,0.3)' }}>
+          style={{ color: text(0.3) }}>
           I've seen enough — show my results →
         </button>
       )}

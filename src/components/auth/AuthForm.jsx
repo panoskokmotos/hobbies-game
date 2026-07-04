@@ -1,6 +1,7 @@
 import { Eye, EyeOff } from 'lucide-react'
 import { Spinner } from '../ui/Spinner.jsx'
 import { AVATAR_EMOJIS } from '../../data/archetypes.js'
+import { TEXT, text } from '../../lib/theme.js'
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18">
@@ -17,7 +18,7 @@ const AppleIcon = () => (
   </svg>
 )
 
-const inputStyle = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }
+const inputStyle = { background: text(0.05), border: `1px solid ${text(0.12)}`, color: TEXT }
 
 // Shared social/email/magic-link auth widgets. Consolidates what used to be
 // two near-identical implementations (AlienProposalScreen + the screen
@@ -57,7 +58,7 @@ export function AuthForm({
             onClick={() => handleSocialAuth('google')}
             disabled={!!socialLoading}
             className="w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-3 mb-3 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-            style={{ background: 'white', color: '#1f1f1f', opacity: socialLoading ? 0.7 : 1 }}>
+            style={{ background: 'white', color: '#1f1f1f', border: `1px solid ${text(0.14)}`, opacity: socialLoading ? 0.7 : 1 }}>
             {socialLoading === 'google' ? <Spinner size={16} color="#9ca3af" /> : <GoogleIcon />}
             {socialLoading === 'google' ? 'Opening Google…' : 'Continue with Google'}
           </button>
@@ -66,15 +67,15 @@ export function AuthForm({
             onClick={() => handleSocialAuth('apple')}
             disabled={!!socialLoading}
             className="w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-3 mb-4 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-            style={{ background: '#1a1a1a', color: 'white', border: '1px solid rgba(255,255,255,0.15)', opacity: socialLoading ? 0.7 : 1 }}>
+            style={{ background: '#1a1a1a', color: 'white', border: `1px solid ${text(0.15)}`, opacity: socialLoading ? 0.7 : 1 }}>
             {socialLoading === 'apple' ? <Spinner size={16} color="#9ca3af" /> : <AppleIcon />}
             {socialLoading === 'apple' ? 'Opening Apple…' : 'Continue with Apple'}
           </button>
 
           <div className="flex items-center gap-3 mb-4">
-            <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
-            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>or</span>
-            <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
+            <div className="h-px flex-1" style={{ background: text(0.08) }} />
+            <span className="text-xs" style={{ color: text(0.25) }}>or</span>
+            <div className="h-px flex-1" style={{ background: text(0.08) }} />
           </div>
 
           <button onClick={() => onChangeView('signup')}
@@ -85,14 +86,14 @@ export function AuthForm({
           {showMagicLinkOption && (
             <button onClick={() => onChangeView('magic')}
               className="w-full py-2.5 rounded-xl text-sm font-medium mb-3 transition-all hover:opacity-80"
-              style={{ color: 'rgba(255,255,255,0.35)' }}>
+              style={{ color: text(0.35) }}>
               ✨ Email me a magic link
             </button>
           )}
           {showSignInLink && (
             <button onClick={() => onChangeView('signin')}
               className="w-full py-2 rounded-xl text-xs transition-opacity hover:opacity-70"
-              style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              style={{ color: text(0.3), border: `1px solid ${text(0.08)}` }}>
               Already have an account? Sign in
             </button>
           )}
@@ -102,18 +103,18 @@ export function AuthForm({
       {(view === 'signup' || view === 'signin') && (
         <form onSubmit={view === 'signup' ? onSubmitSignUp : onSubmitSignIn} className="space-y-2.5">
           <button type="button" onClick={() => onChangeView('entry')} className="text-xs mb-1 transition-opacity hover:opacity-70"
-            style={{ color: 'rgba(255,255,255,0.3)' }}>← back</button>
+            style={{ color: text(0.3) }}>← back</button>
 
           {showAvatarPicker && view === 'signup' && (
-            <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <p className="text-xs mb-2.5 font-medium text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>Pick your avatar</p>
+            <div className="rounded-xl p-3" style={{ background: text(0.04), border: `1px solid ${text(0.08)}` }}>
+              <p className="text-xs mb-2.5 font-medium text-center" style={{ color: text(0.4) }}>Pick your avatar</p>
               <div className="grid grid-cols-5 gap-1.5">
                 {AVATAR_EMOJIS.map(em => (
                   <button key={em} type="button" onClick={() => onSelectAvatar?.(em)}
                     className="h-10 rounded-xl text-xl flex items-center justify-center transition-all"
                     style={{
-                      background: selectedAvatar === em ? 'rgba(253,41,123,0.2)' : 'rgba(255,255,255,0.04)',
-                      border: selectedAvatar === em ? '1.5px solid rgba(253,41,123,0.6)' : '1px solid rgba(255,255,255,0.07)',
+                      background: selectedAvatar === em ? 'rgba(253,41,123,0.2)' : text(0.04),
+                      border: selectedAvatar === em ? '1.5px solid rgba(253,41,123,0.6)' : `1px solid ${text(0.07)}`,
                       transform: selectedAvatar === em ? 'scale(1.1)' : 'scale(1)',
                     }}>
                     {em}
@@ -125,14 +126,14 @@ export function AuthForm({
 
           {view === 'signup' && (
             <input type="text" placeholder="Your name" value={name} onChange={e => setName(e.target.value)} required
-              className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none" style={inputStyle} />
+              className="w-full px-4 py-3 rounded-xl text-sm outline-none" style={inputStyle} />
           )}
           <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required
-            className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none" style={inputStyle} />
+            className="w-full px-4 py-3 rounded-xl text-sm outline-none" style={inputStyle} />
           <div className="relative">
             <input type={showPw ? 'text' : 'password'} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required
-              className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none pr-10" style={inputStyle} />
-            <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.3)' }}>
+              className="w-full px-4 py-3 rounded-xl text-sm outline-none pr-10" style={inputStyle} />
+            <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: text(0.3) }}>
               {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
             </button>
           </div>
@@ -146,7 +147,7 @@ export function AuthForm({
           {showSignInLink && (
             <button type="button" onClick={() => onChangeView(view === 'signup' ? 'signin' : 'signup')}
               className="w-full py-2 text-xs transition-opacity hover:opacity-70"
-              style={{ color: 'rgba(255,255,255,0.3)' }}>
+              style={{ color: text(0.3) }}>
               {view === 'signup' ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
             </button>
           )}
@@ -156,9 +157,9 @@ export function AuthForm({
       {view === 'magic' && (
         <form onSubmit={onSubmitMagicLink} className="space-y-2.5">
           <button type="button" onClick={() => onChangeView('entry')} className="text-xs mb-1 transition-opacity hover:opacity-70"
-            style={{ color: 'rgba(255,255,255,0.3)' }}>← back</button>
+            style={{ color: text(0.3) }}>← back</button>
           <input type="email" placeholder="Your email" value={email} onChange={e => setEmail(e.target.value)} required
-            className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none" style={inputStyle} />
+            className="w-full px-4 py-3 rounded-xl text-sm outline-none" style={inputStyle} />
           <button type="submit" disabled={loading}
             className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
             style={{ background: 'rgba(139,92,246,0.2)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.4)', opacity: loading ? 0.7 : 1 }}>

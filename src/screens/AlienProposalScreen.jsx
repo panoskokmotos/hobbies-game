@@ -3,6 +3,7 @@ import { CATEGORY_COLORS } from '../data/categories.js'
 import { alienReaction } from '../lib/helpers.js'
 import { useAuthForm } from '../hooks/useAuthForm.js'
 import { AuthForm } from '../components/auth/AuthForm.jsx'
+import { BG, TEXT, text } from '../lib/theme.js'
 
 // ─── ALIEN PROPOSAL SCREEN ───────────────────────────────────────────────────
 
@@ -33,14 +34,14 @@ export function AlienProposalScreen({ liked, archetype, scores, recommendations,
 
   if (magicSent) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: '#0a0a0f' }}>
+      <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: BG }}>
         <div className="w-full max-w-xs text-center">
           <div className="text-6xl mb-4">✨</div>
-          <h2 className="text-white text-2xl font-bold mb-3" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>Check your inbox</h2>
-          <p className="text-sm leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.45)' }}>
+          <h2 className="text-2xl font-bold mb-3" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: TEXT }}>Check your inbox</h2>
+          <p className="text-sm leading-relaxed mb-6" style={{ color: text(0.45) }}>
             Magic link sent to <span style={{ color: '#fd297b' }}>{auth.email}</span>. Click it to jump straight in.
           </p>
-          <button onClick={onSkip} className="text-xs transition-opacity hover:opacity-70" style={{ color: 'rgba(255,255,255,0.3)' }}>
+          <button onClick={onSkip} className="text-xs transition-opacity hover:opacity-70" style={{ color: text(0.3) }}>
             Continue without account →
           </button>
         </div>
@@ -50,18 +51,18 @@ export function AlienProposalScreen({ liked, archetype, scores, recommendations,
 
   if (emailConfirm) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: '#0a0a0f' }}>
+      <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: BG }}>
         <div className="w-full max-w-xs text-center">
           <div className="text-6xl mb-4">📬</div>
-          <h2 className="text-white text-2xl font-bold mb-3" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>
+          <h2 className="text-2xl font-bold mb-3" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: TEXT }}>
             Check your inbox
           </h2>
-          <p className="text-sm leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.45)' }}>
+          <p className="text-sm leading-relaxed mb-6" style={{ color: text(0.45) }}>
             We sent a confirmation link to <span style={{ color: '#fd297b' }}>{auth.email}</span>. Click it and come back to explore.
           </p>
           <button onClick={onSkip}
             className="text-xs transition-opacity hover:opacity-70"
-            style={{ color: 'rgba(255,255,255,0.3)' }}>
+            style={{ color: text(0.3) }}>
             Continue without account →
           </button>
         </div>
@@ -71,7 +72,7 @@ export function AlienProposalScreen({ liked, archetype, scores, recommendations,
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 py-10 relative overflow-hidden"
-      style={{ background: '#0a0a0f' }}>
+      style={{ background: BG }}>
       <div className="absolute inset-0 pointer-events-none"
         style={{ background: 'radial-gradient(ellipse 70% 50% at 50% 25%, rgba(139,92,246,0.12) 0%, transparent 70%)' }} />
 
@@ -84,11 +85,11 @@ export function AlienProposalScreen({ liked, archetype, scores, recommendations,
           <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#8b5cf6' }}>
             The alien has spoken
           </p>
-          <h1 className="text-white text-3xl font-bold leading-tight mb-2"
-            style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>
+          <h1 className="text-3xl font-bold leading-tight mb-2"
+            style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: TEXT }}>
             {alienReaction(liked)}
           </h1>
-          <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
+          <p className="text-sm leading-relaxed" style={{ color: text(0.4) }}>
             Will you join Polymath? Your archetype awaits — and so do your people.
           </p>
         </div>
@@ -122,7 +123,7 @@ export function AlienProposalScreen({ liked, archetype, scores, recommendations,
           />
           <button onClick={onSkip}
             className="w-full text-xs mt-3 transition-opacity hover:opacity-70 text-center"
-            style={{ color: 'rgba(255,255,255,0.25)' }}>
+            style={{ color: text(0.25) }}>
             Skip for now — explore first →
           </button>
         </div>
