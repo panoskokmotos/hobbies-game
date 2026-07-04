@@ -5,6 +5,7 @@ import { BADGES } from '../data/badges.js'
 import { CATEGORY_COLORS } from '../data/categories.js'
 import { computeScores, getShareUrl } from '../lib/helpers.js'
 import { updateProfile } from '../lib/api.js'
+import { subscribeToPush } from '../lib/push.js'
 import { useAuthForm } from '../hooks/useAuthForm.js'
 import { AuthForm } from '../components/auth/AuthForm.jsx'
 import { RadarChart } from '../components/RadarChart.jsx'
@@ -101,14 +102,17 @@ export function ProfileScreen({ archetype, liked, recommendations, onRestart, us
   const [editingName, setEditingName] = useState(false)
   const [displayName, setDisplayName] = useState(dbProfile?.display_name || user?.email?.split('@')[0] || '')
   const [bio, setBio] = useState(dbProfile?.bio || '')
-  const [pushGranted, setPushGranted] = useState(() => typeof Notification !== 'undefined' && Notification.permission === 'granted')
+  const [pushGranted, setPushGranted] = useState(() => !!dbProfile?.push_subscription)
+  const [pushPending, setPushPending] = useState(false)
   const scores = scoresProp ?? computeScores(liked)
   const cardRef = useRef(null)
 
   const requestPush = async () => {
-    if (!('Notification' in window)) return
-    const perm = await Notification.requestPermission()
-    setPushGranted(perm === 'granted')
+    if (!user) return
+    setPushPending(true)
+    const { subscribed } = await subscribeToPush(user.id)
+    setPushGranted(subscribed)
+    setPushPending(false)
   }
 
   const badgeStats = { liked: liked.length, streak: streak?.count || 0, matches: matchCount || 0, hasBio: !!(dbProfile?.bio) }
@@ -294,17 +298,17 @@ export function ProfileScreen({ archetype, liked, recommendations, onRestart, us
         </div>
 
         {/* Push notifications */}
-        {user && typeof Notification !== 'undefined' && Notification.permission !== 'granted' && !pushGranted && (
+        {user && !pushGranted && (
           <div className="rounded-2xl p-4 mb-7 flex items-center gap-4"
             style={{ background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.2)' }}>
             <div className="flex-1">
               <p className="text-sm font-semibold text-white mb-0.5">Stay in the loop</p>
               <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>Get notified when you match</p>
             </div>
-            <button onClick={requestPush}
-              className="px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] flex-shrink-0"
+            <button onClick={requestPush} disabled={pushPending}
+              className="px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] flex-shrink-0 disabled:opacity-60"
               style={{ background: 'rgba(139,92,246,0.2)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.35)' }}>
-              Enable
+              {pushPending ? 'Enabling…' : 'Enable'}
             </button>
           </div>
         )}

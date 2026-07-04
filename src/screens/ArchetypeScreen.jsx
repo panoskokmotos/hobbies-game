@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Share2, Check } from 'lucide-react'
 import { CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS } from '../data/categories.js'
-import { computeScores } from '../lib/helpers.js'
+import { computeScores, getShareUrl } from '../lib/helpers.js'
 import { RadarChart } from '../components/RadarChart.jsx'
 
 // ─── ARCHETYPE SCREEN ─────────────────────────────────────────────────────────
 
 export function ArchetypeScreen({ archetype, liked, onNext }) {
   const [phase, setPhase] = useState(0)
+  const [copied, setCopied] = useState(false)
   const scores = computeScores(liked)
   const topCats = CATEGORIES.filter(c => scores[c] > 0).sort((a, b) => scores[b] - scores[a])
 
@@ -16,6 +17,28 @@ export function ArchetypeScreen({ archetype, liked, onNext }) {
     const t2 = setTimeout(() => setPhase(2), 1200)
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [])
+
+  // This is the single most exciting, most shareable moment in the app —
+  // the "here's who you are" reveal, à la Spotify Wrapped or a personality
+  // quiz result. Previously the only share entry point was buried later in
+  // ProfileScreen; putting it here, at peak excitement, is the highest-
+  // leverage lever for organic growth this app has.
+  const handleShare = async () => {
+    const shareUrl = getShareUrl(archetype, liked)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `I'm ${archetype.name} on Polymath`,
+          text: `${archetype.description} Discover your archetype →`,
+          url: shareUrl,
+        })
+        return
+      } catch {}
+    }
+    navigator.clipboard.writeText(shareUrl).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2200)
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden"
@@ -59,6 +82,17 @@ export function ArchetypeScreen({ archetype, liked, onNext }) {
             </div>
           )}
         </div>
+
+        <button onClick={handleShare}
+          className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 mb-3 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+          style={{
+            background: copied ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.08)',
+            border: copied ? '1px solid rgba(16,185,129,0.4)' : '1px solid rgba(255,255,255,0.18)',
+            color: copied ? '#10b981' : 'white',
+          }}>
+          {copied ? <Check size={16} /> : <Share2 size={16} />}
+          {copied ? 'Link copied!' : 'Share your archetype'}
+        </button>
 
         <button onClick={onNext}
           className="w-full py-4 rounded-2xl text-black font-bold text-base flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
