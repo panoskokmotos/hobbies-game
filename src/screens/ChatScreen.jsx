@@ -102,7 +102,7 @@ export function ChatScreen({ match, otherProfile, otherArch, myLikedCards, user,
             <div key={msg.id || i} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
               <div className="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed"
                 style={mine
-                  ? { background: 'rgba(251,191,36,0.18)', color: '#fde68a', borderBottomRightRadius: 6 }
+                  ? { background: 'rgba(253,41,123,0.18)', color: '#ffd1e0', borderBottomRightRadius: 6 }
                   : { background: 'rgba(139,92,246,0.18)', color: '#c4b5fd', borderBottomLeftRadius: 6 }}>
                 {msg.content}
               </div>
@@ -143,13 +143,13 @@ export function ChatScreen({ match, otherProfile, otherArch, myLikedCards, user,
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
             placeholder="Say something…"
             className="flex-1 px-4 py-3 rounded-2xl text-sm text-white outline-none"
-            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', caretColor: '#fbbf24' }}
+            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', caretColor: '#fd297b' }}
           />
           <button
             onClick={() => handleSend()}
             disabled={!text.trim() || sending}
             className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-110 active:scale-95 disabled:opacity-40"
-            style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)' }}>
+            style={{ background: 'linear-gradient(135deg,#fd297b,#ff655b)' }}>
             <ChevronRight size={20} color="#000" />
           </button>
         </div>

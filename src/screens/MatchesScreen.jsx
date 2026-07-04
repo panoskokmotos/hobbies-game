@@ -49,7 +49,7 @@ export function MatchesScreen({ onNext }) {
         </div>
         <button onClick={onNext}
           className="w-full py-4 rounded-2xl text-black font-bold text-base flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)', boxShadow: '0 0 40px rgba(251,191,36,0.25)' }}>
+          style={{ background: 'linear-gradient(135deg,#fd297b,#ff655b)', boxShadow: '0 0 40px rgba(253,41,123,0.25)' }}>
           See My Profile <ChevronRight size={18} />
         </button>
       </div>

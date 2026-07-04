@@ -128,10 +128,10 @@ export function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initi
         </div>
         <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
           <div className="h-full rounded-full transition-all duration-300"
-            style={{ width: `${((index - startIndex) / total) * 100}%`, background: 'linear-gradient(90deg,#f59e0b,#fbbf24)' }} />
+            style={{ width: `${((index - startIndex) / total) * 100}%`, background: 'linear-gradient(90deg,#ff655b,#fd297b)' }} />
         </div>
         {liked.length > 0 && (
-          <p className="text-xs mt-1.5 text-right" style={{ color: 'rgba(251,191,36,0.7)' }}>
+          <p className="text-xs mt-1.5 text-right" style={{ color: 'rgba(253,41,123,0.7)' }}>
             {liked.length} loved ✦
           </p>
         )}
@@ -175,17 +175,17 @@ export function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initi
           </div>
           <div className="flex flex-col items-center gap-2 animate-fade-up" style={{ animationDelay: '0.5s' }}>
             <div className="w-12 h-12 rounded-full flex items-center justify-center"
-              style={{ background: 'rgba(251,191,36,0.2)', border: '1.5px solid rgba(251,191,36,0.5)' }}>
-              <Heart size={22} color="#fbbf24" />
+              style={{ background: 'rgba(253,41,123,0.2)', border: '1.5px solid rgba(253,41,123,0.5)' }}>
+              <Heart size={22} color="#fd297b" />
             </div>
-            <span className="text-xs font-semibold" style={{ color: 'rgba(251,191,36,0.8)' }}>like</span>
+            <span className="text-xs font-semibold" style={{ color: 'rgba(253,41,123,0.8)' }}>like</span>
           </div>
         </div>
       )}
 
       {streakMsg && (
         <div className="mt-6 px-5 py-2.5 rounded-2xl text-sm font-semibold text-center animate-bounce-in"
-          style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)', maxWidth: 280 }}>
+          style={{ background: 'rgba(253,41,123,0.12)', color: '#fd297b', border: '1px solid rgba(253,41,123,0.25)', maxWidth: 280 }}>
           {streakMsg}
         </div>
       )}
@@ -203,8 +203,8 @@ export function SwipeScreen({ onComplete, onQuickComplete, startIndex = 0, initi
         </button>
         <button onClick={() => decide('right')}
           className="w-16 h-16 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
-          style={{ background: 'rgba(251,191,36,0.12)', border: '1.5px solid rgba(251,191,36,0.35)' }}>
-          <Heart size={26} color="#fbbf24" />
+          style={{ background: 'rgba(253,41,123,0.12)', border: '1.5px solid rgba(253,41,123,0.35)' }}>
+          <Heart size={26} color="#fd297b" />
         </button>
       </div>
 

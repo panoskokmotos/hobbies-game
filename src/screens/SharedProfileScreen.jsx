@@ -35,7 +35,7 @@ export function SharedProfileScreen({ shared, onContinue }) {
 
         <button onClick={onContinue}
           className="w-full py-4 rounded-2xl text-black font-bold text-base transition-all duration-200 hover:scale-[1.02]"
-          style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)', boxShadow: '0 0 40px rgba(251,191,36,0.25)' }}>
+          style={{ background: 'linear-gradient(135deg,#fd297b,#ff655b)', boxShadow: '0 0 40px rgba(253,41,123,0.25)' }}>
           Find out what you are →
         </button>
       </div>

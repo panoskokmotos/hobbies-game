@@ -21,7 +21,7 @@ export function ReturningUserScreen({ saved, onContinue, onRestart }) {
           transition: 'all 0.6s cubic-bezier(0.16,1,0.3,1)',
         }}>
         <div className="text-6xl mb-4 animate-float">{saved.archetype.emoji}</div>
-        <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#fbbf24' }}>
+        <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#fd297b' }}>
           Welcome back
         </p>
         <h1 className="text-white text-3xl font-bold mb-2 leading-tight"
@@ -52,7 +52,7 @@ export function ReturningUserScreen({ saved, onContinue, onRestart }) {
 
         <button onClick={onContinue}
           className="w-full py-4 rounded-2xl text-black font-bold text-base mb-3 transition-all duration-200 hover:scale-[1.02]"
-          style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)', boxShadow: '0 0 40px rgba(251,191,36,0.25)' }}>
+          style={{ background: 'linear-gradient(135deg,#fd297b,#ff655b)', boxShadow: '0 0 40px rgba(253,41,123,0.25)' }}>
           Continue to My Profile
         </button>
         <button onClick={onRestart}

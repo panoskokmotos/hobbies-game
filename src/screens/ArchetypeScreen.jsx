@@ -44,15 +44,15 @@ export function ArchetypeScreen({ archetype, liked, onNext }) {
     <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden"
       style={{ background: '#0a0a0f' }}>
       <div className="absolute inset-0 pointer-events-none animate-glow-pulse"
-        style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 30%, rgba(251,191,36,0.14) 0%, transparent 70%)' }} />
+        style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 30%, rgba(253,41,123,0.14) 0%, transparent 70%)' }} />
       <div className="absolute inset-0 pointer-events-none transition-opacity duration-700"
-        style={{ background: 'radial-gradient(circle at 50% 40%, rgba(251,191,36,0.25) 0%, transparent 55%)', opacity: phase === 0 ? 1 : 0 }} />
+        style={{ background: 'radial-gradient(circle at 50% 40%, rgba(253,41,123,0.25) 0%, transparent 55%)', opacity: phase === 0 ? 1 : 0 }} />
 
       <div className="w-full max-w-sm relative z-10"
         style={{ opacity: phase >= 1 ? 1 : 0, transform: phase >= 1 ? 'translateY(0)' : 'translateY(24px)', transition: 'opacity 0.7s ease, transform 0.7s cubic-bezier(0.16,1,0.3,1)' }}>
         <div className="flex justify-center mb-5">
           <span className="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-[0.15em]"
-            style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+            style={{ background: 'rgba(253,41,123,0.12)', color: '#fd297b', border: '1px solid rgba(253,41,123,0.3)' }}>
             {archetype.rarityLabel} · {archetype.rarity}% of users
           </span>
         </div>
@@ -96,7 +96,7 @@ export function ArchetypeScreen({ archetype, liked, onNext }) {
 
         <button onClick={onNext}
           className="w-full py-4 rounded-2xl text-black font-bold text-base flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)', boxShadow: '0 0 40px rgba(251,191,36,0.3)' }}>
+          style={{ background: 'linear-gradient(135deg,#fd297b,#ff655b)', boxShadow: '0 0 40px rgba(253,41,123,0.3)' }}>
           See What's Next For Me <ChevronRight size={18} />
         </button>
       </div>

@@ -105,8 +105,8 @@ export function LikesYouScreen({ user, myProfile, onMatch }) {
                     </button>
                     <button onClick={() => handleDecide(profile, 'right')} disabled={isDeciding}
                       className="flex-1 py-2 rounded-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 disabled:opacity-40"
-                      style={{ background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)' }}>
-                      <Heart size={16} color="#fbbf24" />
+                      style={{ background: 'rgba(253,41,123,0.12)', border: '1px solid rgba(253,41,123,0.35)' }}>
+                      <Heart size={16} color="#fd297b" />
                     </button>
                   </div>
                 </div>

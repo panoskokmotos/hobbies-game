@@ -36,14 +36,14 @@ export function RadarChart({ scores, size = 280, animate = false }) {
         const p = toXY(i, maxR)
         return <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
       })}
-      <polygon points={dataPts} fill="rgba(251,191,36,0.18)" stroke="#fbbf24" strokeWidth="2"
+      <polygon points={dataPts} fill="rgba(253,41,123,0.18)" stroke="#fd297b" strokeWidth="2"
         style={{ transition: drawn ? 'all 0.8s cubic-bezier(0.34,1.56,0.64,1)' : 'none' }} />
       {CATEGORIES.map((cat, i) => {
         const val = scores[cat] || 0
         const r = drawn ? (Math.min(val, 8) / 8) * maxR : 0
         const p = toXY(i, r)
         return <circle key={cat} cx={p.x} cy={p.y} r={val > 0 ? 4 : 2}
-          fill={val > 0 ? '#fbbf24' : 'rgba(255,255,255,0.2)'}
+          fill={val > 0 ? '#fd297b' : 'rgba(255,255,255,0.2)'}
           style={{ transition: drawn ? 'all 0.8s cubic-bezier(0.34,1.56,0.64,1)' : 'none' }} />
       })}
       {CATEGORIES.map((cat, i) => {

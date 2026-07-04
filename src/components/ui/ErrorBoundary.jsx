@@ -23,7 +23,7 @@ export class ErrorBoundary extends Component {
           <button
             onClick={() => window.location.reload()}
             className="px-6 py-3 rounded-2xl font-bold text-sm text-black transition-all hover:scale-[1.02]"
-            style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)' }}>
+            style={{ background: 'linear-gradient(135deg,#fd297b,#ff655b)' }}>
             Reload
           </button>
         </div>
