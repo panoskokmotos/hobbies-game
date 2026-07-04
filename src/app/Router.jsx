@@ -241,6 +241,7 @@ export default function Router() {
               liked={liked}
               recommendations={recommendations}
               onRestart={handleRestart}
+              onBack={() => setScreen('matches')}
               user={user}
               scores={scores}
               streak={streak}
