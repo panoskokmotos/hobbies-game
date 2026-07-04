@@ -9,7 +9,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 // fires after the exit animation finishes (for the actual state mutation —
 // advancing the deck, recording the swipe, etc), matching the two-phase
 // timing both original implementations relied on.
-export function useSwipeDeck({ onDecide, onDecideComplete, canDecide = true, exitDurationMs = 380 }) {
+export function useSwipeDeck({ onDecide, onDecideComplete, canDecide = true, exitDurationMs = 380, enableUp = false }) {
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
   const [exiting, setExiting] = useState(null)
@@ -36,10 +36,11 @@ export function useSwipeDeck({ onDecide, onDecideComplete, canDecide = true, exi
     const onKey = e => {
       if (e.key === 'ArrowRight') decide('right')
       if (e.key === 'ArrowLeft') decide('left')
+      if (enableUp && e.key === 'ArrowUp') decide('up')
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [decide])
+  }, [decide, enableUp])
 
   const onPointerDown = e => {
     if (isDeciding.current) return
@@ -53,8 +54,10 @@ export function useSwipeDeck({ onDecide, onDecideComplete, canDecide = true, exi
   }
   const onPointerUp = () => {
     if (!dragStart.current) return
-    if (offset.x > 80) decide('right')
-    else if (offset.x < -80) decide('left')
+    const { x, y } = offset
+    if (enableUp && y < -80 && Math.abs(y) > Math.abs(x)) decide('up')
+    else if (x > 80) decide('right')
+    else if (x < -80) decide('left')
     else { setOffset({ x: 0, y: 0 }); setDragging(false) }
     dragStart.current = null
   }

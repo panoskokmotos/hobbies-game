@@ -148,9 +148,10 @@ const checkMutualLike = async (myUserId, theirUserId) => {
     .select('direction')
     .eq('swiper_id', theirUserId)
     .eq('swiped_id', myUserId)
+    .in('direction', ['like', 'superlike'])
     .limit(1)
   if (error) return { mutual: false, error }
-  return { mutual: data?.[0]?.direction === 'like', error: null }
+  return { mutual: (data?.length ?? 0) > 0, error: null }
 }
 
 // ─── MATCHES ──────────────────────────────────────────────────────────────────
@@ -219,6 +220,18 @@ export const sendMessage = async (matchId, senderId, content) => {
   }
 }
 
+// Marks every message the other person sent in this match as read by us —
+// called whenever we view the chat, so their client shows "Seen" once it
+// next polls. UpdateBuilder only supports .eq() filters (no .neq()), so this
+// takes the other participant's id explicitly rather than "not me".
+export const markMessagesRead = async (matchId, otherUserId) => {
+  try {
+    return await bb.from('messages').update({ read_at: new Date().toISOString() }).eq('match_id', matchId).eq('sender_id', otherUserId)
+  } catch (err) {
+    return { error: { message: err.message || 'Could not mark messages read' } }
+  }
+}
+
 // ─── ADMIRERS ─────────────────────────────────────────────────────────────────
 
 export const getAdmirers = async (myUserId) => {
@@ -227,7 +240,7 @@ export const getAdmirers = async (myUserId) => {
     if (swipeErr) return { data: [], error: swipeErr }
     const seen = new Set((mySwipes || []).map(s => s.swiped_id))
 
-    const { data, error } = await bb.from('swipes').select('swiper_id').eq('swiped_id', myUserId).eq('direction', 'like')
+    const { data, error } = await bb.from('swipes').select('swiper_id').eq('swiped_id', myUserId).in('direction', ['like', 'superlike'])
     if (error) return { data: [], error }
 
     return { data: (data || []).filter(s => !seen.has(s.swiper_id)).map(s => s.swiper_id), error: null }

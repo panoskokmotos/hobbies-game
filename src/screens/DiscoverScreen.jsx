@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, Heart, Undo2 } from 'lucide-react'
+import { X, Heart, Undo2, Star } from 'lucide-react'
 import { CARDS } from '../data/cards.js'
 import { CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS } from '../data/categories.js'
 import { ALL_ARCHETYPES } from '../data/archetypes.js'
@@ -64,16 +64,18 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
 
   const { offset, dragging, exiting, decide, onPointerDown, onPointerMove, onPointerUp } = useSwipeDeck({
     canDecide: filteredProfiles.length > 0,
+    enableUp: true,
     onDecide: (direction) => {
       playSwipe(direction)
-      if (navigator.vibrate) navigator.vibrate(direction === 'right' ? [20] : [10])
+      if (navigator.vibrate) navigator.vibrate(direction === 'up' ? [15, 30, 15] : direction === 'right' ? [20] : [10])
     },
     onDecideComplete: async (direction) => {
       const profile = currentProfile
       if (!profile) return
-      await recordSwipe(user.id, profile.user_id, direction === 'right' ? 'like' : 'pass')
+      const swipeDirection = direction === 'right' ? 'like' : direction === 'up' ? 'superlike' : 'pass'
+      await recordSwipe(user.id, profile.user_id, swipeDirection)
       let matched = false
-      if (direction === 'right') {
+      if (direction === 'right' || direction === 'up') {
         const result = await createMatchIfMutual(user.id, profile.user_id)
         matched = result.matched
         if (matched) onMatch?.(profile)
@@ -283,6 +285,7 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
         hasNext={!!filteredProfiles[1]}
         yDamp={0.2} exitTransition="transform 0.38s ease-in"
         rightLabel="CONNECT" leftLabel="PASS"
+        enableUp upLabel="SUPER LIKE"
       >
         <div className="flex flex-col items-center justify-center flex-1 px-6 pt-8 pb-2">
           <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-3"
@@ -341,11 +344,11 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
         </div>
 
         <p className="text-center pb-3 text-xs pointer-events-none" style={{ color: 'rgba(255,255,255,0.2)' }}>
-          ← drag or arrow keys →
+          ← drag or arrow keys → · ↑ super like
         </p>
       </SwipeDeck>
 
-      <div className="flex items-center gap-6 mt-8">
+      <div className="flex items-center gap-4 mt-8">
         <button onClick={handleUndo} disabled={!lastDecision}
           className="w-11 h-11 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 disabled:opacity-25 disabled:hover:scale-100"
           style={{ background: 'rgba(255,255,255,0.05)', border: '1.5px solid rgba(255,255,255,0.15)' }}>
@@ -355,6 +358,11 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
           className="w-16 h-16 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
           style={{ background: 'rgba(96,165,250,0.12)', border: '1.5px solid rgba(96,165,250,0.35)' }}>
           <X size={26} color="#60a5fa" />
+        </button>
+        <button onClick={() => decide('up')}
+          className="w-11 h-11 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+          style={{ background: 'rgba(34,211,238,0.12)', border: '1.5px solid rgba(34,211,238,0.35)' }}>
+          <Star size={18} color="#22d3ee" />
         </button>
         <button onClick={() => decide('right')}
           className="w-16 h-16 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
