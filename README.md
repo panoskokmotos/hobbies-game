@@ -1,5 +1,14 @@
 # Polymath
 
+<!--
+  HERO IMAGE: assets/hero.svg is a placeholder. To swap in a real screenshot,
+  drop your image at assets/hero.png (a 1280x640 shot works well) and change
+  the src below from assets/hero.svg to assets/hero.png. Nothing else to edit.
+-->
+<p align="center">
+  <img src="assets/hero.svg" alt="Polymath preview" width="820">
+</p>
+
 Discover who you are. Polymath is a self discovery web app where you swipe through interests, uncover your archetype, and find people who think like you. It runs as an installable Progressive Web App and works on mobile and desktop.
 
 Live idea in one line: swipe cards, get scored across a set of dimensions, see your archetype, then connect with intellectual soulmates.
