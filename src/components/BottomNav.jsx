@@ -51,7 +51,7 @@ export function BottomNav({ tab, onTab, matchCount = 0, admirerCount = 0, locked
                 {locked ? <Lock size={16} /> : <Icon size={20} />}
                 {!locked && badge > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-xs flex items-center justify-center font-bold"
-                    style={{ background: '#8b5cf6', color: 'white', fontSize: 9 }}>{badge}</span>
+                    style={{ background: '#fd297b', color: 'white', fontSize: 9 }}>{badge}</span>
                 )}
               </div>
               <span className="text-xs font-medium">{label}</span>

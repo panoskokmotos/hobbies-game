@@ -74,7 +74,7 @@ export function ChatScreen({ match, otherProfile, otherArch, myLikedCards, user,
           <X size={18} color={muted(0.6)} />
         </button>
         <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl flex-shrink-0"
-          style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)' }}>
+          style={{ background: 'rgba(253,41,123,0.15)', border: '1px solid rgba(253,41,123,0.3)' }}>
           {otherProfile?.avatar_emoji || otherArch?.emoji || '👤'}
         </div>
         <div className="flex-1 min-w-0">
@@ -103,8 +103,8 @@ export function ChatScreen({ match, otherProfile, otherArch, myLikedCards, user,
             <div key={msg.id || i} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
               <div className="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed"
                 style={mine
-                  ? { background: 'rgba(253,41,123,0.14)', color: '#9d1857', borderBottomRightRadius: 6 }
-                  : { background: 'rgba(139,92,246,0.14)', color: '#6d28d9', borderBottomLeftRadius: 6 }}>
+                  ? { background: 'linear-gradient(135deg,#fd297b,#ff655b)', color: 'white', borderBottomRightRadius: 6 }
+                  : { background: muted(0.06), color: TEXT, borderBottomLeftRadius: 6 }}>
                 {msg.content}
               </div>
               {isLastMine && (

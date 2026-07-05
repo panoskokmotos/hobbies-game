@@ -14,7 +14,7 @@ export function SharedProfileScreen({ shared, onContinue }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={{ background: BG }}>
       <div className="w-full max-w-xs">
-        <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#8b5cf6' }}>Someone shared their archetype</p>
+        <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#fd297b' }}>Someone shared their archetype</p>
         <div className="text-6xl mb-3 animate-float">{archetype.emoji}</div>
         <h1 className="text-2xl font-bold mb-2 leading-tight" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: TEXT }}>
           {archetype.name}

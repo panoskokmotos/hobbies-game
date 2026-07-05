@@ -34,7 +34,7 @@ function ProfileAuthCTA({ user, archetype, liked, scores, recommendations, onSav
         <p className="text-sm mb-4" style={{ color: text(0.4) }}>You're in. Start discovering people like you.</p>
         <button onClick={onGoDiscover}
           className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white' }}>
+          style={{ background: 'linear-gradient(135deg,#fd297b,#ff655b)', color: 'white' }}>
           Discover People →
         </button>
       </div>
@@ -50,7 +50,7 @@ function ProfileAuthCTA({ user, archetype, liked, scores, recommendations, onSav
         <p className="text-sm mb-4" style={{ color: text(0.4) }}>Profile saved. Start meeting your people.</p>
         <button onClick={onGoDiscover}
           className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white' }}>
+          style={{ background: 'linear-gradient(135deg,#fd297b,#ff655b)', color: 'white' }}>
           Discover People →
         </button>
       </div>
@@ -59,12 +59,12 @@ function ProfileAuthCTA({ user, archetype, liked, scores, recommendations, onSav
 
   return (
     <div className="rounded-3xl p-6 mb-8"
-      style={{ background: 'linear-gradient(145deg,rgba(139,92,246,0.08),rgba(139,92,246,0.03))', border: '1px solid rgba(139,92,246,0.25)' }}>
+      style={{ background: 'linear-gradient(145deg,rgba(253,41,123,0.08),rgba(253,41,123,0.03))', border: '1px solid rgba(253,41,123,0.25)' }}>
       {view === 'entry' ? (
         <>
           <div className="flex items-center gap-2 mb-1">
-            <Zap size={16} color="#8b5cf6" />
-            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: '#8b5cf6' }}>Now live</span>
+            <Zap size={16} color="#fd297b" />
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: '#fd297b' }}>Now live</span>
           </div>
           <h3 className="font-bold text-xl mb-1" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em', color: TEXT }}>
             Meet real people
@@ -308,14 +308,14 @@ export function ProfileScreen({ archetype, liked, recommendations, onRestart, on
         {/* Push notifications */}
         {user && !pushGranted && (
           <div className="rounded-2xl p-4 mb-7 flex items-center gap-4"
-            style={{ background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.2)' }}>
+            style={{ background: 'rgba(253,41,123,0.07)', border: '1px solid rgba(253,41,123,0.2)' }}>
             <div className="flex-1">
               <p className="text-sm font-semibold mb-0.5" style={{ color: TEXT }}>Stay in the loop</p>
               <p className="text-xs" style={{ color: text(0.4) }}>Get notified when you match</p>
             </div>
             <button onClick={requestPush} disabled={pushPending}
               className="px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] flex-shrink-0 disabled:opacity-60"
-              style={{ background: 'rgba(139,92,246,0.2)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.35)' }}>
+              style={{ background: 'rgba(253,41,123,0.2)', color: '#fd297b', border: '1px solid rgba(253,41,123,0.35)' }}>
               {pushPending ? 'Enabling…' : 'Enable'}
             </button>
           </div>
