@@ -38,7 +38,7 @@ export function MyMatchesScreen({ user, myProfile }) {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: BG, paddingBottom: 80 }}>
-        <Spinner size={48} color="#a78bfa" />
+        <Spinner size={48} color="#fd297b" />
       </div>
     )
   }
@@ -80,9 +80,9 @@ export function MyMatchesScreen({ user, myProfile }) {
                   })
                 }}
                   className="w-full rounded-2xl p-4 flex items-center gap-4 text-left transition-all hover:scale-[1.01] active:scale-[0.99]"
-                  style={{ background: 'linear-gradient(145deg,rgba(139,92,246,0.07),rgba(139,92,246,0.03))', border: '1px solid rgba(139,92,246,0.2)' }}>
+                  style={{ background: 'linear-gradient(145deg,rgba(253,41,123,0.07),rgba(253,41,123,0.03))', border: '1px solid rgba(253,41,123,0.2)' }}>
                   <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0"
-                    style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)' }}>
+                    style={{ background: 'rgba(253,41,123,0.12)', border: '1px solid rgba(253,41,123,0.25)' }}>
                     {other?.avatar_emoji || otherArch?.emoji || '👤'}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -94,10 +94,10 @@ export function MyMatchesScreen({ user, myProfile }) {
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
                     <div className="flex items-center gap-1.5">
                       {!seenMatchIds.has(match.id) && (
-                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: '#8b5cf6', boxShadow: '0 0 6px rgba(139,92,246,0.7)' }} />
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: '#fd297b', boxShadow: '0 0 6px rgba(253,41,123,0.7)' }} />
                       )}
                       <span className="text-xs font-bold px-2.5 py-1.5 rounded-full"
-                        style={{ background: 'rgba(139,92,246,0.18)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.35)' }}>
+                        style={{ background: 'rgba(253,41,123,0.18)', color: '#fd297b', border: '1px solid rgba(253,41,123,0.35)' }}>
                         Message →
                       </span>
                     </div>

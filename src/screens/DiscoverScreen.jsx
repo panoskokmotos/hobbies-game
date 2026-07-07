@@ -59,7 +59,26 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
       if (![...categoryFilter].some(cat => pCats.has(cat))) return false
     }
     return true
-  }), [profiles, swipedIds, minCompat, categoryFilter, myProfile])
+  // Sort best-match-first: every swipe stays relevant, and the single closest
+  // match naturally lands on top as the "twin" hero card (below).
+  }).sort((a, b) =>
+    compatibilityScore(myProfile?.category_scores, b.category_scores) -
+    compatibilityScore(myProfile?.category_scores, a.category_scores)
+  ), [profiles, swipedIds, minCompat, categoryFilter, myProfile])
+
+  // "Meet your twin": the single highest-compatibility person in the whole deck,
+  // surfaced first with a distinct reveal. A near-identical match is a far
+  // stronger opening hook than a random first card — but only when it's
+  // genuinely close (>=70%), otherwise the framing would overpromise.
+  const TWIN_THRESHOLD = 70
+  const twinId = useMemo(() => {
+    let best = null, bestScore = TWIN_THRESHOLD
+    for (const p of profiles) {
+      const s = compatibilityScore(myProfile?.category_scores, p.category_scores)
+      if (s >= bestScore) { best = p.user_id; bestScore = s }
+    }
+    return best
+  }, [profiles, myProfile])
 
   const currentProfile = filteredProfiles[0]
 
@@ -164,7 +183,7 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
           <button
             onClick={handleInvite}
             className="px-6 py-3 rounded-2xl font-bold text-sm mb-8 transition-all hover:scale-[1.03] active:scale-[0.97]"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', boxShadow: '0 0 30px rgba(139,92,246,0.3)' }}>
+            style={{ background: 'linear-gradient(135deg,#fd297b,#ff655b)', color: 'white', boxShadow: '0 0 30px rgba(253,41,123,0.3)' }}>
             {isEmpty ? '✨ Invite friends & unlock matches' : '🔗 Invite more people'}
           </button>
         )}
@@ -206,6 +225,7 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
   const myLikedIds = new Set(myProfile?.liked_card_ids || [])
   const sharedCards = likedCards.filter(c => myLikedIds.has(c.id)).slice(0, 3)
   const activeFilterCount = (minCompat > 0 ? 1 : 0) + categoryFilter.size
+  const isTwin = profile.user_id === twinId && !swipedIds.has(profile.user_id)
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center select-none"
@@ -267,13 +287,13 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
         {admirerCount > 0 && (
           <button onClick={onViewLikes}
             className="mt-2 w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-opacity hover:opacity-85"
-            style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)' }}>
+            style={{ background: 'rgba(253,41,123,0.1)', border: '1px solid rgba(253,41,123,0.25)' }}>
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0"
-              style={{ background: 'rgba(139,92,246,0.2)' }}>
+              style={{ background: 'rgba(253,41,123,0.2)' }}>
               💜
             </div>
             <p className="text-xs leading-tight flex-1" style={{ color: text(0.6) }}>
-              <span style={{ color: '#a78bfa', fontWeight: 600 }}>{admirerCount} {admirerCount === 1 ? 'person' : 'people'}</span> already {admirerCount === 1 ? 'likes' : 'like'} you — see who →
+              <span style={{ color: '#fd297b', fontWeight: 600 }}>{admirerCount} {admirerCount === 1 ? 'person' : 'people'}</span> already {admirerCount === 1 ? 'likes' : 'like'} you — see who →
             </p>
           </button>
         )}
@@ -288,9 +308,21 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
         rightLabel="CONNECT" leftLabel="PASS"
         enableUp upLabel="SUPER LIKE"
       >
-        <div className="flex flex-col items-center justify-center flex-1 px-6 pt-8 pb-2">
+        {isTwin && (
+          <div className="mx-4 mt-4 -mb-1 px-3 py-2 rounded-2xl flex items-center gap-2"
+            style={{ background: 'linear-gradient(135deg,rgba(253,41,123,0.12),rgba(255,101,91,0.1))', border: '1px solid rgba(253,41,123,0.3)' }}>
+            <span className="text-lg">🧬</span>
+            <p className="text-xs leading-tight font-medium" style={{ color: '#fd297b' }}>
+              Your closest match — someone almost identical to you.
+            </p>
+          </div>
+        )}
+        <div className="flex flex-col items-center justify-center flex-1 px-6 pt-6 pb-2">
           <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-3"
-            style={{ background: text(0.05), border: `1px solid ${text(0.1)}` }}>
+            style={{
+              background: isTwin ? 'rgba(253,41,123,0.1)' : text(0.05),
+              border: isTwin ? '2px solid rgba(253,41,123,0.4)' : `1px solid ${text(0.1)}`,
+            }}>
             {profile.avatar_emoji || archName?.emoji || '👤'}
           </div>
 
@@ -335,8 +367,8 @@ export function DiscoverScreen({ user, myProfile, onMatch, onViewLikes }) {
 
           {compat > 0 && (
             <div className="flex items-center gap-2 px-4 py-2 rounded-full mb-1"
-              style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)' }}>
-              <span className="text-xs font-bold" style={{ color: '#8b5cf6' }}>{compat}% compatible</span>
+              style={{ background: 'rgba(253,41,123,0.12)', border: '1px solid rgba(253,41,123,0.25)' }}>
+              <span className="text-xs font-bold" style={{ color: '#fd297b' }}>{compat}% compatible</span>
             </div>
           )}
           {whyPhrase && (

@@ -23,7 +23,7 @@ export function MatchesScreen({ onNext }) {
         <div className="space-y-4 mb-7">
           {SEED_PROFILES.map((profile, i) => (
             <div key={i} className="rounded-3xl p-5"
-              style={{ background: 'linear-gradient(145deg,rgba(139,92,246,0.06),rgba(139,92,246,0.02))', border: `1px solid ${text(0.07)}`, opacity: phase ? 1 : 0, transform: phase ? 'translateY(0)' : 'translateY(20px)', transition: `opacity 0.6s ${i * 120}ms, transform 0.6s cubic-bezier(0.16,1,0.3,1) ${i * 120}ms` }}>
+              style={{ background: 'linear-gradient(145deg,rgba(253,41,123,0.06),rgba(253,41,123,0.02))', border: `1px solid ${text(0.07)}`, opacity: phase ? 1 : 0, transform: phase ? 'translateY(0)' : 'translateY(20px)', transition: `opacity 0.6s ${i * 120}ms, transform 0.6s cubic-bezier(0.16,1,0.3,1) ${i * 120}ms` }}>
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-11 h-11 rounded-full flex items-center justify-center text-xl flex-shrink-0"
                   style={{ background: `${profile.color}15`, border: `1px solid ${profile.color}30` }}>

@@ -76,7 +76,7 @@ export function RecommendationsScreen({ liked, onNext }) {
             ))}
             <button onClick={() => onNext(data)}
               className="w-full py-4 rounded-2xl text-white font-bold text-base flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] mt-2"
-              style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', boxShadow: '0 0 40px rgba(139,92,246,0.25)' }}>
+              style={{ background: 'linear-gradient(135deg,#fd297b,#ff655b)', boxShadow: '0 0 40px rgba(253,41,123,0.25)' }}>
               Meet Your Matches <ChevronRight size={18} />
             </button>
           </div>

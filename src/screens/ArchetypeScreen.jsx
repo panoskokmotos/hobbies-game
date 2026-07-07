@@ -1,16 +1,22 @@
 import { useState, useEffect } from 'react'
-import { ChevronRight, Share2, Check } from 'lucide-react'
+import { ChevronRight, Share2, Check, Users, X } from 'lucide-react'
+import { CARDS } from '../data/cards.js'
 import { CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS } from '../data/categories.js'
 import { computeScores, getShareUrl } from '../lib/helpers.js'
 import { RadarChart } from '../components/RadarChart.jsx'
+import { ComparisonView } from '../components/ComparisonView.jsx'
 import { BG, TEXT, text } from '../lib/theme.js'
 
 // ─── ARCHETYPE SCREEN ─────────────────────────────────────────────────────────
 
-export function ArchetypeScreen({ archetype, liked, onNext }) {
+export function ArchetypeScreen({ archetype, liked, compareFriend, onNext }) {
   const [phase, setPhase] = useState(0)
   const [copied, setCopied] = useState(false)
+  const [showCompare, setShowCompare] = useState(false)
   const scores = computeScores(liked)
+  const friendCards = compareFriend
+    ? compareFriend.likedIds.map(id => CARDS.find(c => c.id === id)).filter(Boolean)
+    : []
   const topCats = CATEGORIES.filter(c => scores[c] > 0).sort((a, b) => scores[b] - scores[a])
 
   useEffect(() => {
@@ -95,12 +101,36 @@ export function ArchetypeScreen({ archetype, liked, onNext }) {
           {copied ? 'Link copied!' : 'Share your archetype'}
         </button>
 
+        {compareFriend?.archetype && friendCards.length > 0 && (
+          <button onClick={() => setShowCompare(true)}
+            className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 mb-3 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+            style={{ background: 'rgba(253,41,123,0.1)', border: '1px solid rgba(253,41,123,0.3)', color: '#fd297b' }}>
+            <Users size={16} /> See how you match with your friend
+          </button>
+        )}
+
         <button onClick={onNext}
           className="w-full py-4 rounded-2xl text-black font-bold text-base flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
           style={{ background: 'linear-gradient(135deg,#fd297b,#ff655b)', boxShadow: '0 0 40px rgba(253,41,123,0.3)' }}>
           See What's Next For Me <ChevronRight size={18} />
         </button>
       </div>
+
+      {showCompare && compareFriend?.archetype && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center px-6 animate-fade-up" style={{ background: BG }}>
+          <button onClick={() => setShowCompare(false)}
+            className="absolute top-6 right-6 w-9 h-9 rounded-full flex items-center justify-center transition-opacity hover:opacity-70"
+            style={{ background: text(0.06), border: `1px solid ${text(0.1)}` }}>
+            <X size={18} color={text(0.6)} />
+          </button>
+          <ComparisonView
+            mine={{ archetype, liked }}
+            theirs={{ archetype: compareFriend.archetype, likedCards: friendCards }}
+            onContinue={() => setShowCompare(false)}
+            continueLabel="Back to my archetype"
+          />
+        </div>
+      )}
     </div>
   )
 }

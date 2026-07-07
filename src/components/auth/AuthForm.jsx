@@ -80,7 +80,7 @@ export function AuthForm({
 
           <button onClick={() => onChangeView('signup')}
             className="w-full py-3 rounded-xl text-sm font-medium mb-2 transition-all hover:opacity-80"
-            style={{ background: 'rgba(139,92,246,0.12)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.25)' }}>
+            style={{ background: 'rgba(253,41,123,0.12)', color: '#fd297b', border: '1px solid rgba(253,41,123,0.25)' }}>
             Continue with Email
           </button>
           {showMagicLinkOption && (
@@ -141,7 +141,7 @@ export function AuthForm({
             type="submit"
             disabled={loading}
             className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', color: 'white', opacity: loading ? 0.7 : 1 }}>
+            style={{ background: 'linear-gradient(135deg,#fd297b,#ff655b)', color: 'white', opacity: loading ? 0.7 : 1 }}>
             {loading ? (view === 'signup' ? 'Creating account…' : 'Signing in…') : (view === 'signup' ? submitLabel : 'Sign In →')}
           </button>
           {showSignInLink && (
@@ -162,7 +162,7 @@ export function AuthForm({
             className="w-full px-4 py-3 rounded-xl text-sm outline-none" style={inputStyle} />
           <button type="submit" disabled={loading}
             className="w-full py-3.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02]"
-            style={{ background: 'rgba(139,92,246,0.2)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.4)', opacity: loading ? 0.7 : 1 }}>
+            style={{ background: 'rgba(253,41,123,0.2)', color: '#fd297b', border: '1px solid rgba(253,41,123,0.4)', opacity: loading ? 0.7 : 1 }}>
             {loading ? 'Sending…' : '✨ Send magic link'}
           </button>
         </form>

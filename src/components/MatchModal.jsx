@@ -18,7 +18,7 @@ export function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, o
   return (
     <Modal variant="center" phase={phase} glow>
       <div className="text-5xl mb-4">💜</div>
-      <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#8b5cf6' }}>It's a match</p>
+      <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#fd297b' }}>It's a match</p>
       <h1 className="text-3xl font-bold mb-3 leading-tight" style={{ fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: TEXT }}>
         You and {theirProfile?.display_name || 'someone'} clicked
       </h1>
@@ -52,7 +52,7 @@ export function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, o
         <div className="self-center text-2xl">✦</div>
         <div className="flex flex-col items-center gap-2">
           <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl"
-            style={{ background: 'rgba(139,92,246,0.12)', border: '2px solid rgba(139,92,246,0.3)' }}>
+            style={{ background: 'rgba(255,101,91,0.14)', border: '2px solid rgba(255,101,91,0.35)' }}>
             {theirProfile?.avatar_emoji || '👤'}
           </div>
           <span className="text-xs" style={{ color: text(0.4) }}>{theirProfile?.display_name || 'Them'}</span>
@@ -67,7 +67,7 @@ export function MatchModal({ myArchetype, myLikedCards, theirProfile, onClose, o
       </button>
       <button onClick={onDiscover}
         className="w-full py-3.5 rounded-2xl text-white font-bold mb-3 transition-all hover:scale-[1.02]"
-        style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)', boxShadow: '0 0 40px rgba(139,92,246,0.3)' }}>
+        style={{ background: 'linear-gradient(135deg,#fd297b,#ff655b)', boxShadow: '0 0 40px rgba(253,41,123,0.3)' }}>
         See My Matches
       </button>
       <button onClick={onClose}

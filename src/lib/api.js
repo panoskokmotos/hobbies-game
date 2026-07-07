@@ -131,11 +131,33 @@ export const getDiscoveryProfiles = async (myUserId, limit = 30) => {
   }
 }
 
+// ─── PUSH NOTIFICATIONS (fire-and-forget) ─────────────────────────────────────
+//
+// Asks a Butterbase serverless function to send a Web Push to `toUserId`. It is
+// deliberately NOT awaited on any critical path and fully swallowed: until the
+// function is deployed and VAPID keys are configured, this is a no-op, and
+// swiping/matching must keep working exactly as before either way.
+// See butterbase/functions/notify-user.ts for the send-side + deploy runbook.
+export const notifyUser = (toUserId, { title, body, url = '/' }) => {
+  try {
+    bb.functions.invoke('notify-user', {
+      method: 'POST',
+      body: { toUserId, title, body, url },
+    }).catch(() => {})
+  } catch {}
+}
+
 // ─── SWIPES ───────────────────────────────────────────────────────────────────
 
 export const recordSwipe = async (swiperId, swipedId, direction) => {
   try {
-    return await bb.from('swipes').insert({ swiper_id: swiperId, swiped_id: swipedId, direction })
+    const result = await bb.from('swipes').insert({ swiper_id: swiperId, swiped_id: swipedId, direction })
+    // Only ping on a super like — high-signal and rare, so it won't spam the
+    // way notifying on every ordinary like would. (A match sends its own push.)
+    if (direction === 'superlike') {
+      notifyUser(swipedId, { title: 'Someone super liked you 💫', body: 'Open Polymath to see who.' })
+    }
+    return result
   } catch (err) {
     return { data: null, error: { message: err.message || 'Could not record swipe' } }
   }
@@ -180,6 +202,10 @@ export const createMatchIfMutual = async (myUserId, theirUserId) => {
     if (existing?.[0]) return { data: existing[0], matched: true, error: null }
 
     const result = await bb.from('matches').insert({ user_a_id: userAId, user_b_id: userBId })
+    // Notify the other person in the moment — this is the whole point of push.
+    if (!result.error) {
+      notifyUser(theirUserId, { title: "It's a match! 💜", body: 'You both liked each other — say hi.' })
+    }
     return { data: result.data, matched: true, error: result.error }
   } catch (err) {
     return { data: null, matched: false, error: { message: err.message || 'Could not create match' } }

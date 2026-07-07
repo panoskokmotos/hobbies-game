@@ -78,15 +78,15 @@ export function LikesYouScreen({ user, myProfile, onMatch }) {
 
               return (
                 <div key={profile.user_id} className="rounded-2xl p-3.5 flex flex-col items-center text-center"
-                  style={{ background: 'linear-gradient(145deg,rgba(139,92,246,0.07),rgba(139,92,246,0.03))', border: '1px solid rgba(139,92,246,0.2)' }}>
+                  style={{ background: 'linear-gradient(145deg,rgba(253,41,123,0.07),rgba(253,41,123,0.03))', border: '1px solid rgba(253,41,123,0.2)' }}>
                   <div className="w-14 h-14 rounded-full flex items-center justify-center text-2xl mb-2"
-                    style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)' }}>
+                    style={{ background: 'rgba(253,41,123,0.12)', border: '1px solid rgba(253,41,123,0.3)' }}>
                     {profile.avatar_emoji || archName?.emoji || '👤'}
                   </div>
                   <p className="font-semibold text-sm truncate w-full" style={{ color: TEXT }}>{profile.display_name || 'Anonymous'}</p>
                   <p className="text-xs mb-1.5 truncate w-full" style={{ color: text(0.4) }}>{archName?.name || 'Explorer'}</p>
                   {compat > 0 && (
-                    <p className="text-xs font-bold mb-1.5" style={{ color: '#8b5cf6' }}>{compat}% compatible</p>
+                    <p className="text-xs font-bold mb-1.5" style={{ color: '#fd297b' }}>{compat}% compatible</p>
                   )}
                   {top2.length > 0 && (
                     <div className="flex gap-1 flex-wrap justify-center mb-3">

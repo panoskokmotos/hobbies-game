@@ -20,7 +20,7 @@ export function Modal({ variant = 'center', phase, glow = false, children }) {
       style={{ background: BG_TRANSLUCENT }}>
       {glow && (
         <div className="absolute inset-0 pointer-events-none animate-glow-pulse"
-          style={{ background: 'radial-gradient(ellipse 70% 50% at 50% 40%, rgba(139,92,246,0.2) 0%, transparent 70%)' }} />
+          style={{ background: 'radial-gradient(ellipse 70% 50% at 50% 40%, rgba(253,41,123,0.2) 0%, transparent 70%)' }} />
       )}
       <div className="w-full max-w-xs text-center relative z-10"
         style={{ opacity: phase ? 1 : 0, transform: phase ? 'scale(1)' : 'scale(0.9)', transition: 'all 0.5s cubic-bezier(0.34,1.56,0.64,1)' }}>
