@@ -16,14 +16,25 @@ export function computeArchetype(liked) {
 }
 
 export function encodeProfile(archetypeId, likedIds) {
-  try { return btoa(JSON.stringify({ a: archetypeId, l: likedIds })) } catch { return '' }
+  try {
+    // URL-safe base64 (base64url, no padding). Plain btoa can emit `+` and `/`,
+    // which URLSearchParams turns into spaces when the `?p=` link is opened —
+    // silently breaking decode for those payloads. base64url survives the round
+    // trip untouched.
+    return btoa(JSON.stringify({ a: archetypeId, l: likedIds }))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  } catch { return '' }
 }
 
 export function decodeProfile(search) {
   try {
-    const payload = new URLSearchParams(search).get('p')
-    if (!payload) return null
-    const { a, l } = JSON.parse(atob(payload))
+    const raw = new URLSearchParams(search).get('p')
+    if (!raw) return null
+    // Accept base64url (new links) and standard base64 (older ones): normalize
+    // back to standard alphabet and re-pad before decoding.
+    let b64 = raw.replace(/-/g, '+').replace(/_/g, '/')
+    while (b64.length % 4) b64 += '='
+    const { a, l } = JSON.parse(atob(b64))
     const archetype = ALL_ARCHETYPES.find(x => x.id === a) ?? null
     const likedIds = Array.isArray(l) ? l : []
     return archetype ? { archetype, likedIds } : null

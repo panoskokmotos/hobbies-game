@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { CARDS } from '../data/cards.js'
 import { computeArchetype, computeScores, decodeProfile } from '../lib/helpers.js'
-import { loadState, saveState, loadStreak, updateStreak, consumePendingQuickOnboard, hasPendingQuickOnboard } from '../lib/storage.js'
+import { loadState, saveState, loadStreak, updateStreak, consumePendingQuickOnboard, hasPendingQuickOnboard, setPendingCompare, consumePendingCompare } from '../lib/storage.js'
 import { BG } from '../lib/theme.js'
 import {
   getSession, onAuthStateChange, signOut,
@@ -40,6 +40,7 @@ export default function Router() {
   const [admirerCount, setAdmirerCount] = useState(0)
   const [streak, setStreak] = useState(() => loadStreak())
   const [sharedProfile, setSharedProfile] = useState(() => decodeProfile(window.location.search))
+  const [compareFriend, setCompareFriend] = useState(null) // decoded friend link, surfaced post-onboarding
 
   // Restore auth session and listen for changes; handle OAuth/email-confirm redirect recovery.
   //
@@ -116,12 +117,27 @@ export default function Router() {
   }, [])
 
   const handleSharedContinue = useCallback(() => {
+    const data = loadState()
+    // Brand-new viewer (no archetype of their own yet): stash the friend's link
+    // so the comparison resurfaces once they finish the quiz. Returning users
+    // already saw the comparison on the landing, so there's nothing to stash.
+    if (!data) {
+      const payload = new URLSearchParams(window.location.search).get('p')
+      if (payload) setPendingCompare(payload)
+    }
     setSharedProfile(null)
     // Drop the ?p= param so a refresh doesn't re-show the shared landing screen.
     window.history.replaceState({}, '', window.location.pathname)
-    const data = loadState()
     if (data) { setSaved(data); setScreen('returning') } else { setScreen('swipe') }
   }, [])
+
+  // Once the viewer has their own archetype, resurface a friend link they opened
+  // before taking the quiz (stashed above) as a comparison offer on the reveal.
+  useEffect(() => {
+    if (!archetype || compareFriend) return
+    const payload = consumePendingCompare()
+    if (payload) setCompareFriend(decodeProfile(`?p=${payload}`))
+  }, [archetype, compareFriend])
 
   useEffect(() => { window.scrollTo(0, 0) }, [screen, tab])
 
@@ -192,7 +208,7 @@ export default function Router() {
   return (
     <div style={{ minHeight: '100vh', background: BG, paddingBottom: showNav ? 72 : 0 }}>
       {screen === 'shared' && sharedProfile && (
-        <SharedProfileScreen shared={sharedProfile} onContinue={handleSharedContinue} />
+        <SharedProfileScreen shared={sharedProfile} viewer={loadState()} onContinue={handleSharedContinue} />
       )}
       {screen === 'returning' && saved && (
         <ReturningUserScreen
@@ -225,7 +241,12 @@ export default function Router() {
         />
       )}
       {screen === 'archetype' && archetype && (
-        <ArchetypeScreen archetype={archetype} liked={liked} onNext={() => setScreen('recommendations')} />
+        <ArchetypeScreen
+          archetype={archetype}
+          liked={liked}
+          compareFriend={compareFriend}
+          onNext={() => setScreen('recommendations')}
+        />
       )}
       {screen === 'recommendations' && (
         <RecommendationsScreen liked={liked} onNext={data => { setRecommendations(data); setScreen('matches') }} />

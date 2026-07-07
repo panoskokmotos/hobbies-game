@@ -84,3 +84,31 @@ export function clearPendingQuickOnboard() {
 export function hasPendingQuickOnboard() {
   try { return !!localStorage.getItem(QUICK_KEY) } catch { return false }
 }
+
+// ─── PENDING FRIEND COMPARE (bridges a share-link open through onboarding) ────
+//
+// When someone opens a friend's `?p=` share link before they've taken the quiz
+// themselves, we stash the friend's encoded payload here and re-surface the
+// side-by-side comparison once they finish onboarding and have their own
+// archetype. Same clear-on-read + TTL discipline as pending quick-onboard.
+
+const COMPARE_KEY = 'polymath_compare'
+const COMPARE_TTL_MS = 30 * 60 * 1000 // 30 minutes — long enough to finish the quiz
+
+export function setPendingCompare(payload) {
+  try {
+    localStorage.setItem(COMPARE_KEY, JSON.stringify({ payload, ts: Date.now() }))
+  } catch {}
+}
+
+export function consumePendingCompare() {
+  let raw = null
+  try { raw = localStorage.getItem(COMPARE_KEY) } catch {}
+  try { localStorage.removeItem(COMPARE_KEY) } catch {}
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    if (Date.now() - (parsed.ts || 0) > COMPARE_TTL_MS) return null
+    return parsed.payload || null
+  } catch { return null }
+}
