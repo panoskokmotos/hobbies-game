@@ -32,4 +32,11 @@ export default [
       'no-empty': ['error', { allowEmptyCatch: true }],
     },
   },
+  {
+    // Vercel serverless functions run on Node, not in the browser.
+    files: ['api/**/*.js'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.es2021 },
+    },
+  },
 ]
