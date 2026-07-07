@@ -1,5 +1,12 @@
 # Push notifications — deploy runbook
 
+> **Note:** the app now sends push through a **Vercel** serverless function
+> (`api/notify.js`) — that's the default path, and its runbook lives in that
+> file's header. This Butterbase-function version is kept as an **alternative**
+> for if you ever move off Vercel. The steps below still apply; just deploy
+> `notify-user.ts` to Butterbase instead of using `api/notify.js`.
+
+
 The client already does its half (see `src/lib/push.js` and `public/sw.js`):
 it registers the service worker, subscribes the browser to Web Push, and
 stores the subscription on the user's profile (`profiles.push_subscription`).

@@ -133,16 +133,19 @@ export const getDiscoveryProfiles = async (myUserId, limit = 30) => {
 
 // ─── PUSH NOTIFICATIONS (fire-and-forget) ─────────────────────────────────────
 //
-// Asks a Butterbase serverless function to send a Web Push to `toUserId`. It is
-// deliberately NOT awaited on any critical path and fully swallowed: until the
-// function is deployed and VAPID keys are configured, this is a no-op, and
-// swiping/matching must keep working exactly as before either way.
-// See butterbase/functions/notify-user.ts for the send-side + deploy runbook.
+// Asks our own Vercel serverless function (api/notify.js) to send a Web Push to
+// `toUserId`. Deliberately NOT awaited on any critical path and fully swallowed:
+// until the function has its VAPID keys configured it's a safe no-op, and
+// swiping/matching keeps working exactly as before either way. `keepalive` lets
+// the request outlive a page navigation. See api/notify.js for the send-side +
+// deploy runbook.
 export const notifyUser = (toUserId, { title, body, url = '/' }) => {
   try {
-    bb.functions.invoke('notify-user', {
+    fetch('/api/notify', {
       method: 'POST',
-      body: { toUserId, title, body, url },
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toUserId, title, body, url }),
+      keepalive: true,
     }).catch(() => {})
   } catch {}
 }
