@@ -43,8 +43,13 @@ export function useAuthForm({ liked, archetype, scores, recommendations, onSigne
     try {
       const { data, error: authErr } = await signUp({ name, email, password })
       if (authErr) { setError(authErr.message || 'Sign up failed'); setLoading(false); return null }
+      // A session is only present when the account is immediately usable
+      // (email confirmation OFF). With confirmation ON, `user` exists but
+      // there's no session yet — writing the profile would be RLS-blocked, so
+      // we bridge the swipe data and let the post-confirm sign-in save it.
       const userId = data?.user?.id
-      if (userId) {
+      const session = data?.session
+      if (userId && session) {
         await saveProfile(userId, {
           archetype, liked, scores, recommendations,
           displayName: displayName ?? name, avatarEmoji,
@@ -53,8 +58,8 @@ export function useAuthForm({ liked, archetype, scores, recommendations, onSigne
         onSignedUp?.(data.user)
         return { confirmationRequired: false }
       }
-      // Email confirmation required: swipe data can't be saved yet (no userId),
-      // so bridge it the same way an OAuth redirect would.
+      // No active session yet → email confirmation required. Bridge the swipe
+      // data the same way an OAuth redirect would, for after they confirm.
       setPendingQuickOnboard(liked.map(c => c.id))
       setLoading(false)
       return { confirmationRequired: true }

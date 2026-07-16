@@ -1,12 +1,15 @@
-import { bb } from './butterbase.js'
+import { supabase } from './supabase.js'
 import { FALLBACK_RECS } from '../data/fallbackRecs.js'
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 
 export const signUp = async ({ name, email, password }) => {
   try {
-    const result = await bb.auth.signUp({ email, password })
-    return result
+    // Returns { data: { user, session }, error }. When email confirmation is
+    // ON, `user` is present but `session` is null until they confirm; when it's
+    // OFF, both are present and they're signed in immediately. useAuthForm keys
+    // off `session` to tell those apart.
+    return await supabase.auth.signUp({ email, password, options: { data: { name } } })
   } catch (err) {
     return { data: null, error: { message: err.message || 'Sign up failed' } }
   }
@@ -14,25 +17,22 @@ export const signUp = async ({ name, email, password }) => {
 
 export const signIn = async ({ email, password }) => {
   try {
-    const result = await bb.auth.signIn({ email, password })
-    return result
+    return await supabase.auth.signInWithPassword({ email, password })
   } catch (err) {
     return { data: null, error: { message: err.message || 'Sign in failed' } }
   }
 }
 
-// signInWithOAuth is synchronous and returns { url } directly — not a
-// Promise, not the { data, error } shape every other auth function returns.
-// The previous code awaited it and destructured { error }, which was always
-// undefined, and never navigated to the returned url — so clicking
-// "Continue with Google/Apple" silently did nothing. Also fixed: the params
-// shape is flat ({ provider, redirectTo }), not { provider, options: { redirectTo } }.
-const startOAuth = (provider) => {
+// Supabase's signInWithOAuth redirects the browser itself (no manual
+// window.location needed); on failure it resolves with an error and no
+// redirect. We just surface { error } so the caller can show a message.
+const startOAuth = async (provider) => {
   try {
-    const { url } = bb.auth.signInWithOAuth({ provider, redirectTo: window.location.origin })
-    if (!url) return { data: null, error: { message: `${provider} sign-in failed` } }
-    window.location.href = url
-    return { data: { url }, error: null }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin },
+    })
+    return { data: null, error: error || null }
   } catch (err) {
     return { data: null, error: { message: err.message || `${provider} sign-in failed` } }
   }
@@ -44,9 +44,11 @@ export const signInWithApple = () => startOAuth('apple')
 
 export const sendMagicLink = async ({ email }) => {
   try {
-    // sendMagicLink takes the email as a plain string, not { email }.
-    await bb.auth.sendMagicLink?.(email)
-    return { data: true, error: null }
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    })
+    return { data: !error, error: error || null }
   } catch (err) {
     return { data: null, error: { message: err.message || 'Could not send magic link' } }
   }
@@ -54,21 +56,35 @@ export const sendMagicLink = async ({ email }) => {
 
 export const signOut = async () => {
   try {
-    return await bb.auth.signOut()
+    return await supabase.auth.signOut()
   } catch (err) {
     return { error: { message: err.message } }
   }
 }
 
-export const getSession = () => bb.sessionManager.getSession()
+// Async in Supabase (reads from storage / parses an OAuth redirect). Resolves
+// to the Session | null.
+export const getSession = async () => {
+  try {
+    const { data } = await supabase.auth.getSession()
+    return data?.session ?? null
+  } catch {
+    return null
+  }
+}
 
-export const onAuthStateChange = (cb) => bb.onAuthStateChange(cb)
+// Returns the Subscription object ({ unsubscribe }). The callback shape
+// (event, session) matches what Router expects.
+export const onAuthStateChange = (cb) => {
+  const { data } = supabase.auth.onAuthStateChange((event, session) => cb(event, session))
+  return data?.subscription
+}
 
 // ─── PROFILES ─────────────────────────────────────────────────────────────────
 
 export const saveProfile = async (userId, { archetype, liked, scores, recommendations, displayName, avatarEmoji }) => {
   try {
-    return await bb.from('profiles').insert({
+    return await supabase.from('profiles').insert({
       user_id: userId,
       archetype_id: archetype.id,
       liked_card_ids: liked.map(c => c.id),
@@ -84,7 +100,7 @@ export const saveProfile = async (userId, { archetype, liked, scores, recommenda
 
 export const getMyProfile = async (userId) => {
   try {
-    return await bb.from('profiles').select('*').eq('user_id', userId).limit(1)
+    return await supabase.from('profiles').select('*').eq('user_id', userId).limit(1)
   } catch (err) {
     return { data: null, error: { message: err.message || 'Could not load profile' } }
   }
@@ -92,7 +108,7 @@ export const getMyProfile = async (userId) => {
 
 export const getProfileByUserId = async (userId) => {
   try {
-    return await bb.from('profiles').select('*').eq('user_id', userId).limit(1)
+    return await supabase.from('profiles').select('*').eq('user_id', userId).limit(1)
   } catch (err) {
     return { data: null, error: { message: err.message || 'Could not load profile' } }
   }
@@ -100,7 +116,7 @@ export const getProfileByUserId = async (userId) => {
 
 export const updateProfile = async (userId, fields) => {
   try {
-    return await bb.from('profiles').update(fields).eq('user_id', userId)
+    return await supabase.from('profiles').update(fields).eq('user_id', userId)
   } catch (err) {
     return { data: null, error: { message: err.message || 'Could not update profile' } }
   }
@@ -109,14 +125,14 @@ export const updateProfile = async (userId, fields) => {
 export const getDiscoveryProfiles = async (myUserId, limit = 30) => {
   try {
     // Get IDs I've already swiped on so we can exclude them
-    const { data: mySwipes, error: swipeErr } = await bb.from('swipes')
+    const { data: mySwipes, error: swipeErr } = await supabase.from('swipes')
       .select('swiped_id')
       .eq('swiper_id', myUserId)
     if (swipeErr) return { data: [], error: swipeErr }
 
     const swipedIds = new Set((mySwipes || []).map(s => s.swiped_id))
 
-    const { data, error } = await bb.from('profiles')
+    const { data, error } = await supabase.from('profiles')
       .select('*')
       .neq('user_id', myUserId)
       .limit(limit)
@@ -154,7 +170,7 @@ export const notifyUser = (toUserId, { title, body, url = '/' }) => {
 
 export const recordSwipe = async (swiperId, swipedId, direction) => {
   try {
-    const result = await bb.from('swipes').insert({ swiper_id: swiperId, swiped_id: swipedId, direction })
+    const result = await supabase.from('swipes').insert({ swiper_id: swiperId, swiped_id: swipedId, direction })
     // Only ping on a super like — high-signal and rare, so it won't spam the
     // way notifying on every ordinary like would. (A match sends its own push.)
     if (direction === 'superlike') {
@@ -168,14 +184,14 @@ export const recordSwipe = async (swiperId, swipedId, direction) => {
 
 export const undoSwipe = async (swiperId, swipedId) => {
   try {
-    return await bb.from('swipes').delete().eq('swiper_id', swiperId).eq('swiped_id', swipedId)
+    return await supabase.from('swipes').delete().eq('swiper_id', swiperId).eq('swiped_id', swipedId)
   } catch (err) {
     return { error: { message: err.message || 'Could not undo swipe' } }
   }
 }
 
 const checkMutualLike = async (myUserId, theirUserId) => {
-  const { data, error } = await bb.from('swipes')
+  const { data, error } = await supabase.from('swipes')
     .select('direction')
     .eq('swiper_id', theirUserId)
     .eq('swiped_id', myUserId)
@@ -193,23 +209,32 @@ export const createMatchIfMutual = async (myUserId, theirUserId) => {
     if (checkErr) return { data: null, matched: false, error: checkErr }
     if (!mutual) return { data: null, matched: false, error: null }
 
-    // Canonicalize row ordering so a concurrent mutual swipe from the other
-    // side is at least detectable as an existing pair, narrowing (though not
-    // fully closing without a DB-level unique constraint) the race window.
+    // Canonicalize row ordering. Combined with the UNIQUE(user_a_id, user_b_id)
+    // constraint in the schema, a concurrent mutual swipe from the other side
+    // can't create a duplicate match — the second insert violates the
+    // constraint and we fall back to the existing row.
     const [userAId, userBId] = [myUserId, theirUserId].sort()
-    const { data: existing } = await bb.from('matches')
+    const { data: existing } = await supabase.from('matches')
       .select('*')
       .eq('user_a_id', userAId)
       .eq('user_b_id', userBId)
       .limit(1)
     if (existing?.[0]) return { data: existing[0], matched: true, error: null }
 
-    const result = await bb.from('matches').insert({ user_a_id: userAId, user_b_id: userBId })
-    // Notify the other person in the moment — this is the whole point of push.
-    if (!result.error) {
-      notifyUser(theirUserId, { title: "It's a match! 💜", body: 'You both liked each other — say hi.' })
+    // .select() so the inserted row (with its id) comes back.
+    const { data: inserted, error: insErr } = await supabase.from('matches')
+      .insert({ user_a_id: userAId, user_b_id: userBId })
+      .select()
+    if (insErr) {
+      // Lost the race — the row now exists; fetch and treat as matched.
+      const { data: raced } = await supabase.from('matches')
+        .select('*').eq('user_a_id', userAId).eq('user_b_id', userBId).limit(1)
+      if (raced?.[0]) return { data: raced[0], matched: true, error: null }
+      return { data: null, matched: false, error: insErr }
     }
-    return { data: result.data, matched: true, error: result.error }
+    // Notify the other person in the moment — this is the whole point of push.
+    notifyUser(theirUserId, { title: "It's a match! 💜", body: 'You both liked each other — say hi.' })
+    return { data: inserted?.[0] ?? null, matched: true, error: null }
   } catch (err) {
     return { data: null, matched: false, error: { message: err.message || 'Could not create match' } }
   }
@@ -217,7 +242,7 @@ export const createMatchIfMutual = async (myUserId, theirUserId) => {
 
 export const undoMatch = async (matchId) => {
   try {
-    return await bb.from('matches').delete().eq('id', matchId)
+    return await supabase.from('matches').delete().eq('id', matchId)
   } catch (err) {
     return { error: { message: err.message || 'Could not undo match' } }
   }
@@ -226,8 +251,8 @@ export const undoMatch = async (matchId) => {
 export const getMyMatches = async (userId) => {
   try {
     const [{ data: asA }, { data: asB }] = await Promise.all([
-      bb.from('matches').select('*').eq('user_a_id', userId),
-      bb.from('matches').select('*').eq('user_b_id', userId),
+      supabase.from('matches').select('*').eq('user_a_id', userId),
+      supabase.from('matches').select('*').eq('user_b_id', userId),
     ])
     const all = [...(asA || []), ...(asB || [])]
     all.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
@@ -241,7 +266,7 @@ export const getMyMatches = async (userId) => {
 
 export const getMessages = async (matchId) => {
   try {
-    return await bb.from('messages').select('*').eq('match_id', matchId).order('created_at', { ascending: true })
+    return await supabase.from('messages').select('*').eq('match_id', matchId).order('created_at', { ascending: true })
   } catch (err) {
     return { data: [], error: { message: err.message || 'Could not load messages' } }
   }
@@ -249,7 +274,7 @@ export const getMessages = async (matchId) => {
 
 export const sendMessage = async (matchId, senderId, content) => {
   try {
-    return await bb.from('messages').insert({ match_id: matchId, sender_id: senderId, content })
+    return await supabase.from('messages').insert({ match_id: matchId, sender_id: senderId, content })
   } catch (err) {
     return { data: null, error: { message: err.message || 'Could not send message' } }
   }
@@ -257,11 +282,10 @@ export const sendMessage = async (matchId, senderId, content) => {
 
 // Marks every message the other person sent in this match as read by us —
 // called whenever we view the chat, so their client shows "Seen" once it
-// next polls. UpdateBuilder only supports .eq() filters (no .neq()), so this
-// takes the other participant's id explicitly rather than "not me".
+// next polls. Takes the other participant's id explicitly.
 export const markMessagesRead = async (matchId, otherUserId) => {
   try {
-    return await bb.from('messages').update({ read_at: new Date().toISOString() }).eq('match_id', matchId).eq('sender_id', otherUserId)
+    return await supabase.from('messages').update({ read_at: new Date().toISOString() }).eq('match_id', matchId).eq('sender_id', otherUserId)
   } catch (err) {
     return { error: { message: err.message || 'Could not mark messages read' } }
   }
@@ -271,11 +295,11 @@ export const markMessagesRead = async (matchId, otherUserId) => {
 
 export const getAdmirers = async (myUserId) => {
   try {
-    const { data: mySwipes, error: swipeErr } = await bb.from('swipes').select('swiped_id').eq('swiper_id', myUserId)
+    const { data: mySwipes, error: swipeErr } = await supabase.from('swipes').select('swiped_id').eq('swiper_id', myUserId)
     if (swipeErr) return { data: [], error: swipeErr }
     const seen = new Set((mySwipes || []).map(s => s.swiped_id))
 
-    const { data, error } = await bb.from('swipes').select('swiper_id').eq('swiped_id', myUserId).in('direction', ['like', 'superlike'])
+    const { data, error } = await supabase.from('swipes').select('swiper_id').eq('swiped_id', myUserId).in('direction', ['like', 'superlike'])
     if (error) return { data: [], error }
 
     return { data: (data || []).filter(s => !seen.has(s.swiper_id)).map(s => s.swiper_id), error: null }
@@ -304,9 +328,9 @@ export const getAdmirerProfiles = async (myUserId) => {
 // a VITE_ANTHROPIC_API_KEY env var. Vite inlines VITE_* vars into the shipped
 // browser bundle, so that key was fully extractable by anyone via devtools —
 // a live key-leak, not a style issue. Until a backend proxy exists (e.g. a
-// Butterbase serverless function holding the key server-side), this always
-// resolves to the curated fallback set. Do not reintroduce a client-side call
-// to a paid LLM API with a VITE_-prefixed key.
+// Supabase Edge Function or a Vercel function holding the key server-side),
+// this always resolves to the curated fallback set. Do not reintroduce a
+// client-side call to a paid LLM API with a VITE_-prefixed key.
 export const getRecommendations = async (_interests) => {
   return { data: FALLBACK_RECS, usingFallback: true }
 }
