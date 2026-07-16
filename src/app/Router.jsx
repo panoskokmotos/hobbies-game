@@ -44,19 +44,18 @@ export default function Router() {
 
   // Restore auth session and listen for changes; handle OAuth/email-confirm redirect recovery.
   //
-  // getSession() is synchronous (verified against the installed @butterbase/sdk —
-  // Session | null with .user present directly), so no await is needed here.
+  // getSession() is async in Supabase (it may need to parse an OAuth redirect
+  // out of the URL), so restore the current user via .then. onAuthStateChange
+  // also fires an initial event, so this is belt-and-suspenders.
   useEffect(() => {
-    const session = getSession()
-    const currentUser = session?.user ?? null
-    if (currentUser) setUser(currentUser)
+    getSession().then(session => {
+      const currentUser = session?.user ?? null
+      if (currentUser) setUser(currentUser)
+    })
 
     // onAuthStateChange's callback signature is (event, session) — two
-    // positional arguments, not a single { session } object. The previous
-    // code destructured the first argument as `({ session: s }) => ...`,
-    // which actually destructured the *event string* and left `s` (and so
-    // `u`) always undefined — meaning OAuth sign-in never completed, since
-    // the redirect-recovery block below is entirely gated on `if (u)`.
+    // positional arguments. The redirect-recovery block below (gated on `if
+    // (u)`) is what completes OAuth / email-confirm sign-in.
     const unsub = onAuthStateChange((event, s) => {
       const u = s?.user ?? null
       setUser(u)
@@ -100,19 +99,24 @@ export default function Router() {
       setScreen('shared')
       return
     }
-    const session = getSession()
-    if (hasPendingQuickOnboard() && session?.user) {
-      // Already handled by onAuthStateChange — just wait (screen stays 'loading')
-      return
-    }
-    setStreak(updateStreak())
-    const data = loadState()
-    if (data) {
-      setSaved(data)
-      setScreen('returning')
-    } else {
-      setScreen('swipe')
-    }
+    let cancelled = false
+    ;(async () => {
+      const session = await getSession()
+      if (cancelled) return
+      if (hasPendingQuickOnboard() && session?.user) {
+        // Already handled by onAuthStateChange — just wait (screen stays 'loading')
+        return
+      }
+      setStreak(updateStreak())
+      const data = loadState()
+      if (data) {
+        setSaved(data)
+        setScreen('returning')
+      } else {
+        setScreen('swipe')
+      }
+    })()
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
